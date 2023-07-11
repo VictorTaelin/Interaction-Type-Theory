@@ -87,8 +87,7 @@ def check(next, stacks, queues):
   # If next is root, we completed a leap
   if next.is_root():
     # If leap is ann-symmetric, it must be con-symmetric too
-    if stacks[ANN] == queues[ANN]:
-        return stacks[CON] == queues[CON]
+    if stacks[ANN] == queues[ANN]: return stacks[CON] == queues[CON]
     return true # Irrelevant leap
 
   # Otherwise, if entering a main port...
