@@ -35,23 +35,22 @@ the real-world performance of the algorithm.
 Now, while it is true that this mismatch between Interaction Combinators and the
 Lambda Calculus may, for some, undermine its applicability as a functional
 runtime, what few realize is that the Intearction Combinators aren't a just a
-subset of the Lambda Calculus: they're a *disjoint* set. While some λ-terms,
+subset of the Lambda Calculus, they're overlapping sets. While some λ-terms,
 such as self-exponentiation, don't have equivalents on Interaction Combinators,
 the opposite is also true. For example, continuations, double-ended queues and
 linear normalization-by-evaluation are important algorithms that can be
 elegantly expressed on Interaction Combinators, but not on the λ-Calculus. This
-raises the question: what if we started treating Interaction Combinators as an
+raises the question: what if we treated Interaction Combinators as an
 independent model of computation with its own merits, and promoted an
 "interactional" paradigm, instead?
 
 In order for such "interactional paradigm" to be compelling, it must be able to
-serve as the foundation of type theory. Yet, while some typed extensions have
+serve as a foundation for type theory. Yet, while some typed extensions have
 been proposed, they separate types as syntatically distinct objects from nets.
-As such, there is nothing that resembles the Calculus of Constructions, and that
-could be used as an unifying language for types and programs, theorems and
-proofs, a la Curry-Howard's isomorphism. In this paper, we introduce the
-Interaction Type Theory, a new logical framework and type-checker capable of
-fulfilling that role.
+There is nothing that resembles the Calculus of Constructions, and that could be
+used as an unifying language for types and programs, theorems and proofs, a la
+Curry-Howard's isomorphism. Interaction Type Theory is a new logical framework
+capable of fulfilling that role.
 
 Interaction Type Theory
 -----------------------
@@ -74,10 +73,12 @@ A leap is similar to an execution, as defined by Yves Lafont, except that, for
 each symbol (CON/DUP/ANN), one keeps both a stack and a queue. Then, when
 entering a cell through its principal port with an empty relevant stack, rather
 than stopping, one chooses one auxiliary port, appending it into a relevant
-queue, and keeps traversing. This process will result in a final state of stacks
-and queues. That state is X-symmetric if its X-stack and X-queues are identical.
-To better illustrate this concept, below is a pseudocode of a potential
-coherence-checking algorithm:
+queue, and keeps traversing. This process halts when we reach the root port
+again, completing a leap. The resulting stacks and queues are then checked for
+symmetry. A leap is X-symmetric if its X-stack and X-queues are identical.  The
+coherence condition dictates that, if a leap is ann-symmetric, it must be
+con-symmetric. To better illustrate this concept, below is a pseudocode of a
+potential coherence-checking algorithm:
 
 ```python
 # Checks if an interaction combinator is coherent
@@ -87,7 +88,8 @@ def check(next, stacks, queues):
   # If next is root, we completed a leap
   if next.is_root():
     # If leap is ann-symmetric, it must be con-symmetric too
-    if stacks[ANN] == queues[ANN]: return stacks[CON] == queues[CON]
+    if stacks[ANN] == queues[ANN]:
+        return stacks[CON] == queues[CON]
     return true # Irrelevant leap
 
   # Otherwise, if entering a main port...
@@ -112,15 +114,14 @@ def check(next, stacks, queues):
   return check(next.goto(0), s0, queues)
 ```
 
-And that's all - this describes the entire theory. What makes this system
-interesting is that coherent ITT-nets correspond to well-typed terms in a logic
-emerging from interaction combinators, and, as such, ITT can be used to write
-theorems and check proofs, in the same way as the Calculus of Constructions
-(CoC). Yet, ITT isn't interchangeable with CoC, in the same way that real
-numbers aren't interchangeable with p-adic numbers; yet, it serves similar
-purposes, and could, in theory, be used as a foundation for mathematics, albeit
-a somewhat esoteric one, at least for humans, but one that, at least, seems to
-be on the sharp side of Occam's Razor.
+And that's all - this describes the entire system. What makes it interesting is
+that coherence captures both equality and type-checking in a single algorithm,
+thus, coherent ITT-nets correspond to well-typed terms in a logic emerging from
+interaction combinators. As such, ITT can be used to write theorems and check
+proofs, in the same way as the Calculus of Constructions (CoC). It could, in
+theory, be used as an alternative foundation for mathematics, albeit a somewhat
+esoteric one, at least for humans, but one that, in terms of raw complexity,
+seems to be on the sharp side of Occam's Razor.
 
 Now, of course, without further explanation, one may be confused regarding in
 which sense the system above can be used as a dependent type checker. It is so
