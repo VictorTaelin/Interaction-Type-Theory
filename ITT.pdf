@@ -1,0 +1,51 @@
+# Interaction Type Theory
+
+Abstract
+--------
+
+In this paper, we present Interaction Type Theory, an extension of Symmetric
+Interaction Combinators, which serves as a fully featured logical framework
+capable of dependent type checking and theorem proving. By introducing a single
+new node type, "annotation," we are able to enforce definitional equalities
+between subnets. Coupled with an equality algorithm based on Yves Lafont's
+execution paths, we arrive at a minimal, concurrent type checker, analogous to
+the "Calculus of Constructions" within Interaction Nets.
+
+Introduction
+------------
+
+Interaction Combinators, a concurrent model of computation proposed by Yves
+Lafont, have been suggested as a more elegant, efficient, and simpler
+alternative to traditional models of computation such as Turing Machines and
+Lambda Calculus. Interaction Combinators provide a fresh perspective on the
+fundamental nature of computation by achieving an optimal implementation of
+Lambda Calculus itself. With a 1-to-1 translation from terms to nets,
+Interaction Combinators efficiently reduce λ-terms to their normal forms.
+
+However, while these accomplishments are noteworthy, the scope of Interaction
+Combinators only extends to a subset of the Lambda Calculus, a limitation that
+impacts their practical application within a functional runtime. Although this
+subset is quite expansive and sufficient for encoding most algorithms, the
+complete coverage of the Lambda Calculus is ultimately required for true
+functional runtimes. Existing solutions necessitate overheads that adversely
+affect real-world performance.
+
+Despite the apparent disparity between Interaction Combinators and the Lambda
+Calculus, it is crucial to recognize that the former is not merely a subset of
+the latter; it is, in fact, a disjoint set. While certain λ-terms, like
+self-exponentiation, lack equivalents in Interaction Combinators, the inverse
+also holds true. Interaction Combinators express algorithms such as
+continuations, double-ended queues, and linear normalization-by-evaluation
+elegantly, while the Lambda Calculus cannot. Consequently, this observation
+urges us to consider Interaction Combinators as an independent computational
+model, thus promoting an "interactional" paradigm.
+
+In order for this interactional paradigm to gain traction, it must serve as the
+foundation of type theory. Sadly, proposed typed extensions merely differentiate
+types as distinct syntactic objects from nets, rather than providing a Calculus
+of Constructions-like language that unifies types, programs, theorems, and
+proofs under the Curry-Howard isomorphism. In response, this paper introduces
+the Interaction Type Theory, which fills this gap as a novel, unifying logical
+framework and type-checker.
+
+

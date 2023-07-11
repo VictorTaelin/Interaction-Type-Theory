@@ -1,16 +1,14 @@
 # Interaction Type Theory
 
-ITT is a very simple extension to Symmetric Interaction Combinators that turns
-this untyped model of computation into a fully featured logical framework,
+Abstract
+--------
+
+I propose a very simple extension to Symmetric Interaction Combinators that
+turns this untyped model of computation into a fully featured logical framework,
 capable of dependent type checking and theorem proving. This is done by adding a
 single new combinator, "annotation", which enforces global symmetries between
 subnets. That alone is sufficient to express a purely interactional type-checker
 in a way that is analogue to an "Calculus of Constructions" on Interaction Nets.
-
-**Note: this is a work in progress. The system is still NOT implemented in this
-repo, but will be soon. This is meant to be an extension of
-[Interaction-Calculus](https://github.com/VictorTaelin/Interaction-Calculus)
-with dependent types in a very natural way.**
 
 Introduction
 ------------
@@ -60,14 +58,14 @@ Combinators with just 1 new combinator, the annotation (ANN), which, like
 constructors (CON) and duplicators (DUP), has 3 ports, and follows identical
 interaction rules. The complete system is illustrated below:
 
-![0](images/page_0.jpg)
+![itt](images/interaction_type_theory_syntax.jpeg)
 
 On top of that system, the following condition is imposed:
 
 ### The Coherence Condition
 
-**An Interaction Type Theory net (ITT-net) is coherent if all its ann-symmetric
-leaps are con-symmetric.**
+**An Interaction Type Theory net (ITT-net) with one free port is coherent if all
+its ann-symmetric leaps are con-symmetric.**
 
 A leap is similar to an execution, as defined by Yves Lafont, except that, for
 each symbol (CON/DUP/ANN), one keeps both a stack and a queue. Then, when
@@ -78,28 +76,28 @@ and queues. That state is X-symmetric if its X-stack and X-queues are identical.
 To better illustrate this concept, below is a pseudocode of a potential
 coherence-checking algorithm:
 
-```python
-# Checks if an interaction combinator is coherent
-def check(next, stacks, queues): 
-  sym = next.symbol() # gets next symbol (CON, DUP or ANN)
+```
+// Checks if an interaction combinator is coherent
+fn check(next, stacks, queues): 
+  sym = next.symbol() // gets next symbol (CON, DUP or ANN)
   
-  # If next is root, we completed a leap
+  // If next is root, we completed a leap
   if next.is_root():
-    # If leap is ann-symmetric, it must be con-symmetric too
+    // If leap is ann-symmetric, it must be con-symmetric too
     if stacks[ANN] == queues[ANN]:
         return stacks[CON] == queues[CON]
-    return true # Irrelevant leap
+    return true // Irrelevant leap
 
-  # Otherwise, if entering a main port...
+  // Otherwise, if entering a main port...
   if next.port == 0:
 
-    # If stack isn't empty, pop from stack and go to that port
+    // If stack isn't empty, pop from stack and go to that port
     if stacks[sym].len() > 0:
       p0 = stacks[sym].get_last()
       s0 = {...stacks, [sym]: stacks[sym].without_last()}
       return check(next.goto(p0), s0, queues)
 
-    # Otherwise, go to both aux ports and prepend them to queue
+    // Otherwise, go to both aux ports and prepend them to queue
     else:
       q0 = {...queues, [sym]: [1] + queues[sym]}
       e0 = check(next.goto(1), stacks, q0)
@@ -107,7 +105,7 @@ def check(next, stacks, queues):
       e1 = check(next.goto(2), stacks, q1)
       return e0 && e1
 
-  # Otherwise, push to stack and go to main port
+  // Otherwise, push to stack and go to main port
   s0 = {...stacks, [sym]: stacks[sym] + [next.port]}
   return check(next.goto(0), s0, queues)
 ```
@@ -119,7 +117,7 @@ theorems and check proofs, in the same way as the Calculus of Constructions
 (CoC). Yet, ITT isn't interchangeable with CoC, in the same way that real
 numbers aren't interchangeable with p-adic numbers; yet, it serves similar
 purposes, and could, in theory, be used as a foundation for mathematics, albeit
-a somewhat esoteric one, at least for humans, but one that, at least, seems to
+a somewhat isoteric one, at least for humans, but one that, at least, seems to
 be on the sharp side of Occam's Razor.
 
 Now, of course, without further explanation, one may be confused regarding in
@@ -149,8 +147,10 @@ translation from the λ-Calculus to Interaction Combinators first.
 skeleton of this done, I'll just draw several examples and finish it futurely...
 
 
+![0](images/page_0.jpg)
 ![1](images/page_1.jpg)
 ![2](images/page_2.jpg)
 ![3](images/page_3.jpg)
 ![4](images/page_4.jpg)
 ![5](images/page_5.jpg)
+![6](images/page_6.jpg)
