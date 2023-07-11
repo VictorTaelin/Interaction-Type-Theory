@@ -1,7 +1,6 @@
 use crate::main;
 use crate::term::*;
 use crate::inet::*;
-use crate::check::*;
 
 pub fn get_body(inet: &INet, host: Port) -> Port {
   return port(addr(enter(inet,host)), 2);

@@ -1,18 +1,4 @@
-// Implements Interaction Combinators. The Interaction Calculus is directly isomorphic to them, so,
-// to reduce a term, we simply translate to interaction combinators, reduce, then translate back.
-
 #![allow(dead_code)]
-
-#[derive(Debug)]
-pub struct INode {
-  label: u32,
-  ports: [String; 3]
-}
-
-type IGraph = Vec<INode>;
-
-// Implements Interaction Combinators. The Interaction Calculus is directly isomorphic to them, so,
-// to reduce a term, we simply translate to interaction combinators, reduce, then translate back.
 
 #[derive(Clone, Debug)]
 pub struct INet {
@@ -23,19 +9,19 @@ pub struct INet {
 
 // Node types are consts because those are used in a Vec<u32>.
 pub const TAG : u32 = 28;
-pub const CON : u32 = 0;
-pub const DUP : u32 = 1;
-pub const ERA : u32 = u32::MAX;
-pub const ANN : u32 = u32::MAX - 1;
-pub const FIX : u32 = u32::MAX - 2;
+pub const ERA : u32 = 0;
+pub const ANN : u32 = 1;
+pub const CON : u32 = 2;
+pub const FIX : u32 = 3;
+pub const DUP : u32 = 4;
 
-// The ROOT port is on the deadlocked root node at address 0.
+// ROOT is port 1 on address 0.
 pub const ROOT : u32 = 1;
 
 // A port is just a u32 combining address (30 bits) and slot (2 bits).
 pub type Port = u32;
 
-// Create a new net, with a deadlocked root node.
+// Create a new net with a root node.
 pub fn new_inet() -> INet {
   INet {
     nodes: vec![2,1,0,0],
@@ -173,6 +159,77 @@ pub fn rewrite(inet: &mut INet, x: Port, y: Port) {
   }
 }
 
+use std::collections::HashMap;
+
+type Paths = HashMap<u32, Vec<u8>>;
+
+// Checks if an interaction combinator net is coherent
+pub fn check(inet: &mut INet, prev: Port) -> bool {
+  is_coherent(inet, prev, &mut HashMap::new(), &mut HashMap::new())
+}
+
+// Checks if an interaction combinator net is coherent
+fn is_coherent(inet: &mut INet, prev: Port, stacks: &mut Paths, queues: &mut Paths) -> bool {
+
+  // Gets next port attributes
+  let next = enter(inet, prev);
+  let kind = kind(inet, addr(next));
+  let slot = slot(next);
+
+  // If next is root, we completed a leap
+  if next == ROOT {
+    // If leap is ann-symmetric, then it must be con-symmetric
+    if is_symmetric(stacks, queues, ANN) {
+      return is_symmetric(stacks, queues, CON);
+    // Otherwise, this is an irrelevant leap
+    } else {
+      return true;
+    }
+  }
+
+  // If next is erasure, turn around
+  if kind == ERA {
+    return is_coherent(inet, port(addr(next), 0), stacks, queues);
+  }
+
+  // If entering a main port...
+  if slot == 0 {
+    // If stack isn't empty, pop from stack and go to that port
+    if let Some(d) = stacks.get_mut(&kind).and_then(|v| v.pop()) {
+      let ed = is_coherent(inet, port(addr(next), d as u32), stacks, queues);
+      stacks.get_mut(&kind).unwrap().push(d);
+      return ed;
+    // Otherwise, go to both aux ports and prepend them to queue
+    } else {
+      queues.entry(kind).or_default().push(1);
+      let e1 = is_coherent(inet, port(addr(next), 1), stacks, queues);
+      queues.get_mut(&kind).unwrap().pop();
+      queues.get_mut(&kind).unwrap().push(2);
+      let e2 = is_coherent(inet, port(addr(next), 2), stacks, queues);
+      queues.get_mut(&kind).unwrap().pop();
+      return e1 && e2;
+    }
+
+  // If entering an aux port, push to stack and go to main port
+  } else {
+    stacks.entry(kind).or_default().push(slot as u8);
+    let e0 = is_coherent(inet, port(addr(next), 0), stacks, queues);
+    stacks.get_mut(&kind).unwrap().pop();
+    return e0;
+  }
+}
+
+// A leap is X-symmetric if it its X-stack and X-queue are identical
+fn is_symmetric(stacks: &mut Paths, queues: &mut Paths, kind: u32) -> bool {
+  match (stacks.get(&kind), queues.get(&kind)) {
+    (Some(stack), Some(queue)) => queue.iter().rev().eq(stack.iter()),
+    (None, Some(queue)) => queue.is_empty(),
+    (Some(stack), None) => stack.is_empty(),
+    (None, None) => true,
+  }
+}
+
+// Debugger
 pub fn show(inet: &INet, prev: Port) -> String {
   let next = enter(inet, prev);
   if next == ROOT {
