@@ -2,3 +2,4 @@
 **/*.rs.bk
 tmp.rs
 /tmp
+.DS_Store

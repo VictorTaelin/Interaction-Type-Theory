@@ -1,7 +1,10 @@
 # Interaction Type Theory
 
-ITT is a very simple extension to Symmetric Interaction Combinators that turns
-this untyped model of computation into a fully featured logical framework,
+Abstract
+--------
+
+I propose a very simple extension to Symmetric Interaction Combinators that
+turns this untyped model of computation into a fully featured logical framework,
 capable of dependent type checking and theorem proving. This is done by adding a
 single new combinator, "annotation", which enforces global symmetries between
 subnets. That alone is sufficient to express a purely interactional type-checker
