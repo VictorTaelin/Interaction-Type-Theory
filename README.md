@@ -5,9 +5,10 @@ this untyped model of computation into a fully featured logical framework,
 capable of dependent type checking and theorem proving. This is done by adding a
 single new combinator, "annotation", which enforces global symmetries between
 subnets. That alone is sufficient to express a purely interactional type-checker
-in a way that is analogue to an "Calculus of Constructions" on Interaction Nets.
+in a way that is analogue to a "Calculus of Constructions" on Interaction Nets.
 
-**Note: this is a work in progress. The system is still NOT implemented in this
+**Note: this is a work in progress, this README is an un-reviewed draft, 
+and the ITT system is still NOT implemented in this
 repo, but will be soon. This is meant to be an extension of
 [Interaction-Calculus](https://github.com/VictorTaelin/Interaction-Calculus)
 with dependent types in a very natural way.**
