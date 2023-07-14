@@ -58,7 +58,7 @@ oversight: typing relations can be *encoded* on top of InTT, by providing
 introduction and elimination rules to the type being encoded, and proving these
 respect coherence. For example, below is an encoding for simple pairs:
 
-![](images/pair_example.jepg)
+![](images/pair_example.jpeg)
 
 The idea is that, by encoding the usual constructors of type theory, we can use
 InTT as a logical framework capable of dependent type checking. This system
