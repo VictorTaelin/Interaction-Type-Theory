@@ -1,6 +1,10 @@
 **Disclaimer: this is a work-in-progress. The claims made in this paper are
 unchecked, and work is ongoing to explore, formalize and prove them rigorously.
-Treat this as no more than private draft shared with friends.**
+Take this as a
+brainstorm of ideas and no more than that. This approach could or (more likely)
+could not work, but exploring it may get us closer to answers. Come discuss
+these ideas in our [Discord](https://discord.gg/kindelia) server, on the #HVM
+channel!**
 
 # Interaction Type Theory
 
@@ -32,9 +36,9 @@ relation dictates that all paths outgoing from a port produce the same
 "execution", as defined by Yves Lafont [citation], which also coincides with
 Damiano Mazza's observational equivalence [citation].
 
-What is surprising is the observation that this minimal system is capable of
+My hypothesis is that this minimal system is capable of
 encoding arbitrary types, propositions and proofs, in a way that is closely
-connected to Type Theory and the Calculus of Constructions. This is done by
+connected to the Calculus of Constructions. This is done by
 reserving a symbol for annotations (ANN), and then treating graphs connected to
 the main port of an ANN nodes as types. Then, any net whose all ANN nodes can
 decay (i.e., when the coherence condition is met) correspond to a valid proof in
