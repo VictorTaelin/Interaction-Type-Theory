@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = "2.26.0"
+rand = "0.8"
 im = "15.1.0"
 
 [[bin]]

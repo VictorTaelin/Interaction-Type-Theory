@@ -159,104 +159,44 @@ pub fn rewrite(inet: &mut INet, x: Port, y: Port) {
   }
 }
 
-use std::collections::HashMap;
-
-type Paths = HashMap<u32, Vec<u8>>;
-
-// Checks if an interaction combinator net is coherent
-pub fn check(inet: &mut INet, prev: Port) -> bool {
-  is_coherent(inet, prev, &mut HashMap::new(), &mut HashMap::new())
-}
-
-// Checks if an interaction combinator net is coherent
-fn is_coherent(inet: &mut INet, prev: Port, stacks: &mut Paths, queues: &mut Paths) -> bool {
-
-  // Gets next port attributes
-  let next = enter(inet, prev);
-  let kind = kind(inet, addr(next));
-  let slot = slot(next);
-
-  // If next is root, we completed a leap
-  if next == ROOT {
-    // If leap is ann-symmetric, then it must be con-symmetric
-    if is_symmetric(stacks, queues, ANN) {
-      return is_symmetric(stacks, queues, CON);
-    // Otherwise, this is an irrelevant leap
-    } else {
-      return true;
-    }
-  }
-
-  // If next is erasure, turn around
-  if kind == ERA {
-    return is_coherent(inet, port(addr(next), 0), stacks, queues);
-  }
-
-  // If entering a main port...
-  if slot == 0 {
-    // If stack isn't empty, pop from stack and go to that port
-    if let Some(d) = stacks.get_mut(&kind).and_then(|v| v.pop()) {
-      let ed = is_coherent(inet, port(addr(next), d as u32), stacks, queues);
-      stacks.get_mut(&kind).unwrap().push(d);
-      return ed;
-    // Otherwise, go to both aux ports and prepend them to queue
-    } else {
-      queues.entry(kind).or_default().push(1);
-      let e1 = is_coherent(inet, port(addr(next), 1), stacks, queues);
-      queues.get_mut(&kind).unwrap().pop();
-      queues.get_mut(&kind).unwrap().push(2);
-      let e2 = is_coherent(inet, port(addr(next), 2), stacks, queues);
-      queues.get_mut(&kind).unwrap().pop();
-      return e1 && e2;
-    }
-
-  // If entering an aux port, push to stack and go to main port
-  } else {
-    stacks.entry(kind).or_default().push(slot as u8);
-    let e0 = is_coherent(inet, port(addr(next), 0), stacks, queues);
-    stacks.get_mut(&kind).unwrap().pop();
-    return e0;
-  }
-}
-
-// A leap is X-symmetric if it its X-stack and X-queue are identical
-fn is_symmetric(stacks: &mut Paths, queues: &mut Paths, kind: u32) -> bool {
-  match (stacks.get(&kind), queues.get(&kind)) {
-    (Some(stack), Some(queue)) => queue.iter().rev().eq(stack.iter()),
-    (None, Some(queue)) => queue.is_empty(),
-    (Some(stack), None) => stack.is_empty(),
-    (None, None) => true,
-  }
-}
-
 // Debugger
 pub fn show(inet: &INet, prev: Port) -> String {
-  let next = enter(inet, prev);
-  if next == ROOT {
-    "".to_string()
-  } else {
-    let slot_next = slot(next);
-    if slot_next == 0 {
-      let a = show(inet, port(addr(next), 1));
-      let b = show(inet, port(addr(next), 2));
-      let k = kind(inet, addr(next));
-      if k == ERA {
-        format!("*")
-      } else {
-        let p = if k == CON {
-          ('(', ')')
-        } else if k == ANN {
-          ('[', ']')
-        } else if k >= DUP {
-          ('{', '}')
-        } else {
-          ('?', '?')
-        };
-        format!("\x1b[2m{}\x1b[0m\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", addr(next), p.0, a, b, p.1)
-      }
+  use std::collections::BTreeMap;
+  pub fn go(inet: &INet, prev: Port, names: &mut BTreeMap<u32,String>) -> String {
+    let next = enter(inet, prev);
+    if next == ROOT {
+      "".to_string()
     } else {
-      let x = show(inet, port(addr(next), 0));
-      format!("{}\x1b[34m{}\x1b[0m", x, if slot_next == 1 { '<' } else { '>' })
+      let slot_next = slot(next);
+      if slot_next == 0 {
+        let a = go(inet, port(addr(next), 1), names);
+        let b = go(inet, port(addr(next), 2), names);
+        let k = kind(inet, addr(next));
+        if k == ERA {
+          format!("*")
+        } else {
+          let p = if k == CON {
+            ('(', ')')
+          } else if k == ANN {
+            ('[', ']')
+          } else if k >= DUP {
+            ('{', '}')
+          } else {
+            ('?', '?')
+          };
+          format!("\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", p.0, a, b, p.1)
+        }
+      } else {
+        if let Some(name) = names.get(&prev) {
+          return name.to_string();
+        } else {
+          let name = crate::term::index_to_name(names.len() as u32 + 1);
+          let name = String::from_utf8_lossy(&name).to_string();
+          names.insert(next, name.clone());
+          return name;
+        }
+      }
     }
   }
+  return go(inet, prev, &mut BTreeMap::new());
 }
