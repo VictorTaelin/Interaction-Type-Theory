@@ -2,7 +2,7 @@
 unchecked, and work is ongoing to explore, formalize and prove them rigorously.
 Take this as a
 brainstorm of ideas and no more than that. This approach could or (more likely)
-could not work, but exploring them may get us closer to answers. Come discuss
+could not work, but exploring it may get us closer to answers. Come discuss
 these ideas in our [Discord](https://discord.gg/kindelia) server!**
 
 # Interaction Type Theory
