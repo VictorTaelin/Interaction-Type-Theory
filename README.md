@@ -35,7 +35,7 @@ relation dictates that all paths outgoing from a port produce the same
 "execution", as defined by Yves Lafont [citation], which also coincides with
 Damiano Mazza's observational equivalence [citation].
 
-What is surprising is the observation that this minimal system is capable of
+My hypothesis is that this minimal system is capable of
 encoding arbitrary types, propositions and proofs, in a way that is closely
 connected to Type Theory and the Calculus of Constructions. This is done by
 reserving a symbol for annotations (ANN), and then treating graphs connected to
