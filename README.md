@@ -37,7 +37,7 @@ Damiano Mazza's observational equivalence [citation].
 
 My hypothesis is that this minimal system is capable of
 encoding arbitrary types, propositions and proofs, in a way that is closely
-connected to Type Theory and the Calculus of Constructions. This is done by
+connected to the Calculus of Constructions. This is done by
 reserving a symbol for annotations (ANN), and then treating graphs connected to
 the main port of an ANN nodes as types. Then, any net whose all ANN nodes can
 decay (i.e., when the coherence condition is met) correspond to a valid proof in
