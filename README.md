@@ -64,13 +64,22 @@ respect coherence. For example, below is an encoding for simple pairs:
 
 ![](images/pair_example.jpeg)
 
-The idea is that, by encoding the usual constructors of type theory, we can use
-InTT as a logical framework capable of dependent type checking. This system
-could be used as the core compilation target of a traditional type-checker, or
-as a more natural structure for program synthesis and symbolic reasoning.
+Since these rules respect coherence, one can "extend" InTT with pairs without
+changing the core system. In the same way, by encoding the usual constructors of
+type theory, we can use InTT as a logical framework capable of dependent type
+checking. This system could be used as the core compilation target of a
+traditional type-checker, or as a more natural structure for program synthesis
+and symbolic reasoning.
 
 ![](images/page_2.jpg)
 
 Below are some encodings of important λ-calculus terms:
 
 ![](images/page_1.jpg)
+
+This "encoding-based" approach is flexible and powerful, as it gives InTT users
+the ability to use features that weren't present on the original formulation of
+the theory. For example, self-types, an important primitive discovered by Aaron
+Stump, which allows for inductive reasoning on λ-encodings, and even quotient
+types - both of which aren't expressive on CoC - can be encoded.
+
