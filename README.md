@@ -1,6 +1,9 @@
 **Disclaimer: this is a work-in-progress. The claims made in this paper are
 unchecked, and work is ongoing to explore, formalize and prove them rigorously.
-Treat this as no more than private draft shared with friends.**
+Treat this as no more than private draft shared with friends. Take this as a
+brainstorm of ideas and no more than that. This approach could or (more likely)
+could not work, but exploring them may get us closer to answers. Come discuss
+these ideas in our [Discord](https://discord.gg/kindelia) server!**
 
 # Interaction Type Theory
 
