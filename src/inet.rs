@@ -207,6 +207,7 @@ pub fn show(inet: &INet, prev: Port) -> String {
           } else {
             ('?', '?')
           };
+          //format!("{}\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", "", p.0, a, b, p.1)
           format!("{}\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", addr(next), p.0, a, b, p.1)
         }
       } else {

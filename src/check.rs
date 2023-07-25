@@ -75,9 +75,9 @@ impl<'a> Cursor<'a> {
           prev = port(addr(next), ds as u32);
           continue;
         }
-      } else {
-        self.push_back(kind, slot as u8);
-        prev = port(addr(next), 0);
+      //} else {
+        //self.push_back(kind, slot as u8);
+        //prev = port(addr(next), 0);
       }
       break;
     }
@@ -93,8 +93,9 @@ pub fn check(inet: &mut INet, prev: Port) -> bool {
     return true;
   } else if slot(next) == 0 {
     if kind(inet, addr(next)) == ANN {
+      println!("checking ann {}", addr(next));
       if equal(inet, prev, next) {
-        decay(inet, addr(prev), addr(next));
+        //decay(inet, addr(prev), addr(next));
         return true;
       } else {
         return false;
@@ -128,6 +129,7 @@ pub fn equal(inet: &mut INet, a: Port, b: Port) -> bool {
 
 // Finds and compares all paired leaps.
 pub fn leaps(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, flip: bool) -> bool {
+  println!("- leap {}:{} {}:{} | {:?} {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path);
   //println!("leaps: {}:{} ~ {}:{}\n  path: {:?} | {:?}\n  logs: {:?} | {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path, a.logs, b.logs);
   let a_next = enter(inet, a.prev);
   let a_slot = slot(a_next);
@@ -140,9 +142,14 @@ pub fn leaps(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, flip: bool) -> boo
     } else if a.length(&ANN) == b.length(&ANN) {
       let a = &mut a.flip(inet);
       let a = &mut a.access(inet);
+      let a = &mut a.flip(inet);
       let b = &mut b.flip(inet);
       let b = &mut b.access(inet);
-      return equiv(inet, a, b, false);
+      let b = &mut b.flip(inet);
+      println!("equiv  : {}:{} ~ {}:{}\n  path : {:?} | {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path);
+      let e = equiv(inet, a, b, false);
+      println!("... {}", e);
+      return e;
     } else {
       return true;
     }
@@ -188,6 +195,9 @@ pub fn leaps(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, flip: bool) -> boo
 
 // Verifies if two paths are λ-equiv
 fn equiv(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, binder: bool) -> bool {
+
+  println!("~ equiv {}:{} {}:{}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev));
+
   let a_next = enter(inet, a.prev);
   let b_next = enter(inet, b.prev);
   let a_kind = kind(inet, addr(a_next));
@@ -224,6 +234,7 @@ fn equiv(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, binder: bool) -> bool 
 
     // Application
     } else if a_slot == 2 && b_slot == 2 {
+      println!("checking arguments... {}:{} {}:{}", addr(a_next), 1, addr(b_next), 1);
       if !equal(inet, port(addr(a_next), 1), port(addr(b_next), 1)) {
         return false;
       } else {

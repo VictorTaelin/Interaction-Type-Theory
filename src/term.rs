@@ -7,7 +7,7 @@ use inet::*;
 use std;
 use self::rand::Rng;
 
-// Terms of the Interaction Calculus.
+// Translations from CoC to ITT.
 // <Term> ::= <Lam> | <App> | <Sup> | <Dup> | <Fix> | <Ann> | <Arr> | <Pol> | <Var> | <Era>
 // <Lam>  ::= "λ" <Name> <Term>
 // <App>  ::= "(" <Term> <Term> ")"
@@ -185,21 +185,21 @@ pub fn inject(inet: &mut INet, term: &Term, host: Port) {
       &All { ref nam, ref inp, ref out } => {
         // new rev
         // random u32 from 0 til 65536:
-        let rnd = rand::random::<u32>() % 256;
-        let all = new_node(net, CON);
-        let an0 = new_node(net, ANN);
-        let an1 = new_node(net, ANN);
-        let dup = new_node(net, DUP + 100);
-        link(net, port(an0, 0), port(all, 1));
-        link(net, port(an0, 1), port(an1, 1));
-        link(net, port(an0, 2), port(dup, 0));
-        scope.insert(nam.to_vec(), port(dup, 2));
-        let inp = encode_term(net, inp, port(an1, 0), scope, vars);
-        link(net, port(an1, 0), inp);
-        link(net, port(an1, 2), port(dup, 1));
-        let out = encode_term(net, out, port(all, 2), scope, vars);
-        link(net, port(all, 2), out);
-        port(all, 0)
+        //let rnd = rand::random::<u32>() % 256;
+        //let all = new_node(net, CON);
+        //let an0 = new_node(net, ANN);
+        //let an1 = new_node(net, ANN);
+        //let dup = new_node(net, DUP + 100);
+        //link(net, port(an0, 0), port(all, 1));
+        //link(net, port(an0, 1), port(an1, 1));
+        //link(net, port(an0, 2), port(dup, 0));
+        //scope.insert(nam.to_vec(), port(dup, 2));
+        //let inp = encode_term(net, inp, port(an1, 0), scope, vars);
+        //link(net, port(an1, 0), inp);
+        //link(net, port(an1, 2), port(dup, 1));
+        //let out = encode_term(net, out, port(all, 2), scope, vars);
+        //link(net, port(all, 2), out);
+        //port(all, 0)
 
         // new
         //let all = new_node(net, CON);
@@ -218,20 +218,20 @@ pub fn inject(inet: &mut INet, term: &Term, host: Port) {
         //port(all, 0)
 
         // old
-        //let all = new_node(net, CON);
-        //let an0 = new_node(net, ANN);
-        //let an1 = new_node(net, ANN);
-        //let dup = new_node(net, DUP);
-        //link(net, port(an0, 0), port(all, 1));
-        //link(net, port(an0, 1), port(an1, 1));
-        //link(net, port(an0, 2), port(dup, 2));
-        //scope.insert(nam.to_vec(), port(dup, 1));
-        //let inp = encode_term(net, inp, port(an1, 0), scope, vars);
-        //link(net, port(an1, 0), inp);
-        //link(net, port(an1, 2), port(dup, 0));
-        //let out = encode_term(net, out, port(all, 2), scope, vars);
-        //link(net, port(all, 2), out);
-        //port(all, 0)
+        let all = new_node(net, CON);
+        let an0 = new_node(net, ANN);
+        let an1 = new_node(net, ANN);
+        let dup = new_node(net, DUP + 1);
+        link(net, port(an0, 0), port(all, 1));
+        link(net, port(an0, 1), port(an1, 1));
+        link(net, port(an0, 2), port(dup, 2));
+        scope.insert(nam.to_vec(), port(dup, 1));
+        let inp = encode_term(net, inp, port(an1, 0), scope, vars);
+        link(net, port(an1, 0), inp);
+        link(net, port(an1, 2), port(dup, 0));
+        let out = encode_term(net, out, port(all, 2), scope, vars);
+        link(net, port(all, 2), out);
+        port(all, 0)
       },
       // Polymorphism nodes become the following net:
       // - pol = CON @ a {out(x)}
@@ -745,7 +745,6 @@ pub fn parse_term<'a>(code: &'a Str, ctx: &mut Context<'a>, idx: &mut u32) -> (&
     },
     // Forall: `∀(nam:inp) -> out`
     b'\xe2' if code[1] == b'\x88' && code[2] == b'\x80' && code[3] == b'(' => {
-      println!("forall!");
       let (code, nam) = parse_name(&code[4..]);
       let code = parse_text(code, b":").unwrap();
       extend(nam, None, ctx);

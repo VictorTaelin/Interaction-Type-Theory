@@ -97,9 +97,32 @@ def test5 =
 
   < λp p
   : & (∀(P: T0) -> &P0 -> P1) ->
-      (∀(Q: T1) -> &Q0 -> Q1)>
+      (∀(Q: T1) -> &Q0 -> Q1)
+  >
 
-test5
+// ...
+def test6 =
+  λP
+  dup P0 P1 = P
+
+  < λx x
+  : &(P0 λt0 λf0 t0) -> (P1 λt1 λf1 t1)
+  >
+  
+//({((a (* a)) [c d]) ((e (* e)) [g d])}
+//(c g))
+
+test6
+
+
+//( [a {{[b c] [d c]} *}]
+//( (({{[f {{g *} *}] [j {{* l} *}]} {[n {{g l} *}] *}} (f (j n))) a)
+//(b
+  //d)))
+
+
+
+
 ";
 
   //  Creates initial term
