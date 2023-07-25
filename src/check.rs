@@ -6,38 +6,32 @@ use std::collections::BTreeMap;
 use std::collections::VecDeque;
 
 pub struct Cursor<'a> {
-  root: Port,
+  init: Port,
   prev: Port,
   path: &'a mut BTreeMap<u32, VecDeque<u8>>,
-  logs: &'a mut Vec<String>,
+  //logs: &'a mut Vec<String>,
 }
 
 impl<'a> Cursor<'a> {
-  fn copy(&mut self) -> Cursor {
+  fn jump(&mut self, prev: Port) -> Cursor {
     Cursor {
-      root: self.root,
-      prev: self.prev,
+      init: self.init,
+      prev: prev,
       path: self.path,
-      logs: self.logs,
+      //logs: self.logs,
     }
+  }
+
+  fn copy(&mut self) -> Cursor {
+    return self.jump(self.prev);
   }
 
   fn flip(&mut self, inet: &INet) -> Cursor {
-    Cursor {
-      root: self.root,
-      prev: enter(inet, self.prev),
-      path: self.path,
-      logs: self.logs,
-    }
+    return self.jump(enter(inet, self.prev));
   }
 
   fn step(&mut self, inet: &INet, slot: u8) -> Cursor {
-    Cursor {
-      root: self.root,
-      prev: port(addr(enter(inet, self.prev)), slot as u32),
-      path: self.path,
-      logs: self.logs,
-    }
+    return self.jump(port(addr(enter(inet, self.prev)), slot as u32));
   }
 
   fn push_back(&mut self, kind: u32, slot: u8) {
@@ -50,17 +44,17 @@ impl<'a> Cursor<'a> {
 
   fn pop_back(&mut self, kind: u32) -> Option<u8> {
     let opt = self.path.get_mut(&kind).and_then(|vec| vec.pop_back());
-    self.cleanup(kind);
+    self.clear(kind);
     opt
   }
 
   fn pop_front(&mut self, kind: u32) -> Option<u8> {
     let opt = self.path.get_mut(&kind).and_then(|vec| vec.pop_front());
-    self.cleanup(kind);
+    self.clear(kind);
     opt
   }
 
-  fn cleanup(&mut self, kind: u32) {
+  fn clear(&mut self, kind: u32) {
     if self.path.get(&kind).map_or(false, |vec| vec.is_empty()) {
       self.path.remove(&kind);
     }
@@ -69,176 +63,174 @@ impl<'a> Cursor<'a> {
   fn length(&self, kind: &u32) -> usize {
     self.path.get(kind).map_or(0, |vec| vec.len())
   }
+
+  fn access(&mut self, inet: &mut INet) -> Cursor {
+    let mut prev = self.prev;
+    loop {
+      let next = enter(inet, prev);
+      let kind = kind(inet, addr(next));
+      let slot = slot(next);
+      if slot == 0 {
+        if let Some(ds) = self.pop_back(kind) {
+          prev = port(addr(next), ds as u32);
+          continue;
+        }
+      } else {
+        self.push_back(kind, slot as u8);
+        prev = port(addr(next), 0);
+      }
+      break;
+    }
+    return self.jump(enter(inet, prev));
+  }
+
 }
 
-// For every ANN node, check if its main port is symmetric
+// A net is coherent when all ANN nodes are symmetric.
 pub fn check(inet: &mut INet, prev: Port) -> bool {
   let next = enter(inet, prev);
   if next == ROOT {
     return true;
   } else if slot(next) == 0 {
     if kind(inet, addr(next)) == ANN {
-      println!(">> check {}:{}", addr(prev), slot(prev));
-      if !equal(inet, prev, next) {
+      if equal(inet, prev, next) {
+        decay(inet, addr(prev), addr(next));
+        return true;
+      } else {
         return false;
       }
+    } else {
+      let e1 = check(inet, port(addr(next), 1));
+      let e2 = check(inet, port(addr(next), 2));
+      return e1 && e2;
     }
-    let e1 = check(inet, port(addr(next), 1));
-    let e2 = check(inet, port(addr(next), 2));
-    return e1 && e2;
   } else {
     return check(inet, port(addr(next), 0));
   }
 }
 
-// Checks if two interaction nets ports are equal.
+// Checks if two interaction net ports are equal.
 pub fn equal(inet: &mut INet, a: Port, b: Port) -> bool {
-  let mut a_path = BTreeMap::new();
-  let mut b_path = BTreeMap::new();
-  let mut a_logs = vec![];
-  let mut b_logs = vec![];
-  let mut a_cursor = Cursor { root: a, prev: a, path: &mut a_path, logs: &mut a_logs, };
-  let mut b_cursor = Cursor { root: b, prev: b, path: &mut b_path, logs: &mut b_logs, };
-  compare(inet, &mut a_cursor, &mut b_cursor, true)
+  let mut a_cursor = Cursor {
+    init: a,
+    prev: a,
+    path: &mut BTreeMap::new(),
+    //logs: &mut vec![],
+  };
+  let mut b_cursor = Cursor {
+    init: b,
+    prev: b,
+    path: &mut BTreeMap::new(),
+    //logs: &mut vec![],
+  };
+  return leaps(inet, &mut a_cursor, &mut b_cursor, true);
 }
 
-// Compares two cursors by moving them forward until root is reached
-pub fn compare(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, flip: bool) -> bool {
-  //println!("Equal: (Node: {}, Slot: {}) ~ (Node {}, Slot {})\n  Paths: {:?} | {:?}\n  Logs : {:?} | {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path, a.logs, b.logs);
-  
+// Finds and compares all paired leaps.
+pub fn leaps(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, flip: bool) -> bool {
+  //println!("leaps: {}:{} ~ {}:{}\n  path: {:?} | {:?}\n  logs: {:?} | {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path, a.logs, b.logs);
   let a_next = enter(inet, a.prev);
   let a_slot = slot(a_next);
   let a_kind = kind(inet, addr(a_next));
 
   // If on root, check
-  if a_next == a.root || a_next == ROOT {
+  if a_next == a.init || a_next == ROOT || a_kind == ERA {
     if flip {
-      return compare(inet, b, a, false);
+      return leaps(inet, b, a, false);
+    } else if a.length(&ANN) == b.length(&ANN) {
+      let a = &mut a.flip(inet);
+      let a = &mut a.access(inet);
+      let b = &mut b.flip(inet);
+      let b = &mut b.access(inet);
+      return equiv(inet, a, b, false);
     } else {
-      if a.length(&ANN) == 1 && b.length(&ANN) == 1 {
-        println!("compat {}:{} {}:{}\n  path : {:?} | {:?}\n  logs : {:?} | {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path, a.logs, b.logs);
-        let an = &mut a.flip(inet);
-        let bn = &mut b.flip(inet);
-        return compatible(inet, an, bn);
-      } else {
-        return true;
-      }
+      return true;
     }
-
-  // If entering an erasure node, go back
-  } else if a_kind == ERA {
-    let an = &mut a.flip(inet);
-    let eq = compare(inet, an, b, flip);
-    return eq;
 
   // If entering main port...
   } else if a_slot == 0 {
 
     // If deque isn't empty, pop_back a slot and move to it
     if let Some(slot) = a.pop_back(a_kind) {
-      a.logs.push(format!("W{}", slot));
+      //a.logs.push(format!("W{}", slot));
       let an = &mut a.step(inet, slot);
-      let eq = compare(inet, an, b, flip);
-      a.logs.pop();
+      let eq = leaps(inet, an, b, flip);
+      //a.logs.pop();
       a.push_back(a_kind, slot);
       return eq;
 
     // If deque is empty, move to slots [1,2] and push_front to the *other* deque
     } else {
-      //println!("enter main (split)");
       for slot in [2,1] {
-        a.logs.push(format!("V{}", slot));
+        //a.logs.push(format!("V{}", slot));
         b.push_front(a_kind, slot);
         let an = &mut a.step(inet, slot);
-        let eq = compare(inet, an, b, flip);
-        a.logs.pop();
+        let eq = leaps(inet, an, b, flip);
+        //a.logs.pop();
         b.pop_front(a_kind);
-        if !eq {
-          return false;
-        }
+        if !eq { return false; }
       }
       return true;
     }
 
   // If entering an aux port, push_back that slot to the deque, and move to the main port
   } else {
-    a.logs.push(format!("^{}", a_slot));
+    //a.logs.push(format!("^{}", a_slot));
     a.push_back(a_kind, slot(enter(inet, a.prev)) as u8);
     let an = &mut a.step(inet, 0);
-    let eq = compare(inet, an, b, flip);
+    let eq = leaps(inet, an, b, flip);
     a.pop_back(a_kind);
-    a.logs.pop();
+    //a.logs.pop();
     return eq;
   }
+
 }
 
-// Verifies if two paths are λ-equivalent
-fn compatible(inet: &mut INet, a: &mut Cursor, b: &mut Cursor) -> bool {
+// Verifies if two paths are λ-equiv
+fn equiv(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, binder: bool) -> bool {
+  let a_next = enter(inet, a.prev);
+  let b_next = enter(inet, b.prev);
+  let a_kind = kind(inet, addr(a_next));
+  let b_kind = kind(inet, addr(b_next));
+  let a_slot = slot(a_next);
+  let b_slot = slot(b_next);
 
-  // Travels down to the bottom of this leap
-  fn down(inet: &mut INet, a: &mut Cursor) {
-    println!("down {}:{}", addr(a.prev), slot(a.prev));
-    let mut a_prev = a.prev;
-    loop {
-      let next = enter(inet, a_prev);
-      let kind = kind(inet, addr(next));
-      let slot = slot(next);
-      if kind != ERA && slot == 0 {
-        let ds = a.pop_back(kind).unwrap();
-        a_prev = port(addr(next), ds as u32);
+  // When 'a' and 'b' reach root, halt
+  if a_next == ROOT && b_next == ROOT {
+    return true;
+
+  // When 'a' and 'b' are ERAs, halt
+  } else if a_kind == ERA && b_kind == ERA {
+    return true;
+
+  // When 'a' is ANN or DUP, go up
+  } else if a_kind == ANN || a_kind == DUP {
+    return equiv(inet, &mut a.step(inet, 0), b, binder);
+
+  // When 'b' is ANN or DUP, go up
+  } else if b_kind == ANN || b_kind == DUP {
+    return equiv(inet, a, &mut b.step(inet, 0), binder);
+
+  // When 'a' and 'b' are CON, compare
+  } else if a_kind == CON && b_kind == CON {
+
+    // Binder
+    if binder {
+      return equiv(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), true);
+
+    // Variable
+    } else if a_slot == 1 && b_slot == 1 {
+      return equiv(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), true);
+
+    // Application
+    } else if a_slot == 2 && b_slot == 2 {
+      if !equal(inet, port(addr(a_next), 1), port(addr(b_next), 1)) {
+        return false;
       } else {
-        break;
+        return equiv(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), binder);
       }
     }
-    a.root = a.root;
-    a.prev = enter(inet, a_prev);
   }
 
-  // Travels back up, checking for λ-equivalence
-  fn up(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, bruijn: bool) -> bool {
-    let a_next = enter(inet, a.prev);
-    let b_next = enter(inet, b.prev);
-    let a_kind = kind(inet, addr(a_next));
-    let b_kind = kind(inet, addr(b_next));
-    let a_slot = slot(a_next);
-    let b_slot = slot(b_next);
-    if a_next == ROOT && b_next == ROOT {
-      println!("up {}:{} {}:{} halt", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev));
-      return true;
-    } else if a_kind == ANN || a_kind == DUP {
-      println!("up {}:{} {}:{} a up", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev));
-      return up(inet, &mut a.step(inet, 0), b, bruijn);
-    } else if b_kind == ANN || b_kind == DUP {
-      println!("up {}:{} {}:{} b up", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev));
-      return up(inet, a, &mut b.step(inet, 0), bruijn);
-    } else if a_kind == CON && b_kind == CON {
-      // Bruijn increment
-      if bruijn {
-        return up(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), true);
-      } else {
-        // Variable
-        if a_slot == 1 && b_slot == 1 {
-          println!("up {}:{} {}:{} con 1", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev));
-          return up(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), true);
-        // Application
-        } else if a_slot == 2 && b_slot == 2 {
-          // Checks argument
-          if !equal(inet, port(addr(a_next), 1), port(addr(b_next), 1)) {
-            return false;
-          } else {
-            return up(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), bruijn);
-          }
-        }
-      }
-    }
-    return false;
-  }
-
-  let a = &mut a.copy();
-  down(inet, a);
-
-  let b = &mut b.copy();
-  down(inet, b);
-  
-  return up(inet, a, b, false);
+  return false;
 }

@@ -72,9 +72,14 @@ pub fn get(inet: &INet, p: Port, s: u32) -> Port {
   enter(inet, port(addr(p), s))
 }
 
-// Kind of the node.
+// Gets the kind of the node.
 pub fn kind(inet: &INet, node: u32) -> u32 {
   inet.nodes[port(node, 3) as usize]
+}
+
+// Sets the kind of the node.
+pub fn transmute(inet: &mut INet, node: u32, value: u32) {
+  inet.nodes[port(node, 3) as usize] = value;
 }
 
 // Links two ports.
@@ -128,34 +133,52 @@ pub fn normal(inet: &mut INet, root: Port) {
   }
 }
 
+// Annihilation interaction.
+fn annihilate(inet: &mut INet, x: Port, y: Port) {
+  let p0 = enter(inet, port(x, 1));
+  let p1 = enter(inet, port(y, 1));
+  link(inet, p0, p1);
+  let p0 = enter(inet, port(x, 2));
+  let p1 = enter(inet, port(y, 2));
+  link(inet, p0, p1);
+  inet.reuse.push(x);
+  inet.reuse.push(y);
+}
+
+// Commute interaction.
+fn commute(inet: &mut INet, x: Port, y: Port) {
+  let t = kind(inet, x);
+  let a = new_node(inet, t);
+  let t = kind(inet, y);
+  let b = new_node(inet, t);
+  let t = enter(inet, port(x, 1));
+  link(inet, port(b, 0), t);
+  let t = enter(inet, port(x, 2));
+  link(inet, port(y, 0), t);
+  let t = enter(inet, port(y, 1));
+  link(inet, port(a, 0), t);
+  let t = enter(inet, port(y, 2));
+  link(inet, port(x, 0), t);
+  link(inet, port(a, 1), port(b, 1));
+  link(inet, port(a, 2), port(y, 1));
+  link(inet, port(x, 1), port(b, 2));
+  link(inet, port(x, 2), port(y, 2));
+}
+
+// Decay interaction.
+pub fn decay(inet: &mut INet, x: Port, y: Port) {
+  let p1 = enter(inet, port(y, 1));
+  let p2 = enter(inet, port(y, 2));
+  link(inet, p1, p2);
+  transmute(inet, addr(x), ERA);
+}
+
 // Rewrites an active pair.
 pub fn rewrite(inet: &mut INet, x: Port, y: Port) {
   if kind(inet, x) == kind(inet, y) {
-    let p0 = enter(inet, port(x, 1));
-    let p1 = enter(inet, port(y, 1));
-    link(inet, p0, p1);
-    let p0 = enter(inet, port(x, 2));
-    let p1 = enter(inet, port(y, 2));
-    link(inet, p0, p1);
-    inet.reuse.push(x);
-    inet.reuse.push(y);
+    annihilate(inet, x, y);
   } else {
-    let t = kind(inet, x);
-    let a = new_node(inet, t);
-    let t = kind(inet, y);
-    let b = new_node(inet, t);
-    let t = enter(inet, port(x, 1));
-    link(inet, port(b, 0), t);
-    let t = enter(inet, port(x, 2));
-    link(inet, port(y, 0), t);
-    let t = enter(inet, port(y, 1));
-    link(inet, port(a, 0), t);
-    let t = enter(inet, port(y, 2));
-    link(inet, port(x, 0), t);
-    link(inet, port(a, 1), port(b, 1));
-    link(inet, port(a, 2), port(y, 1));
-    link(inet, port(x, 1), port(b, 2));
-    link(inet, port(x, 2), port(y, 2));
+    commute(inet, x, y);
   }
 }
 
