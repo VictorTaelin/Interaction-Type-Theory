@@ -62,16 +62,44 @@ def test3 = <true : Unit>
 // Bad
 def test4 = <unit : Bool>
 
-// TODO
-//def test5 =
-  //λT λP λQ
-  //dup T0 T1 = T
-  //dup P0 P1 = P
-  //dup Q0 Q1 = Q
-  //<(λp p) : & (∀(R: T0) -> &P0 -> P1) -> (∀(S: T1) -> &Q0 -> Q1)>
+def term = λA λB λf λg λx λy
+  dup f0 f1 = f
+  dup g0 g1 = g
+  (g0 (f0 (g1 (f1 x))))
 
-test4
+def type =
 
+  dup A0 A1 = A
+  dup A2 A3 = A0
+  dup A4 A5 = A1
+  dup A6 A7 = A2
+
+  dup B0 B1 = B
+  dup B2 B3 = B0
+  dup B4 B5 = B1
+  dup B6 B7 = B2
+
+  ∀A -> ∀B ->
+  & (&A4 -> B4) ->
+  & (&B5 -> A5) -> 
+  & A6 ->
+  & B6 ->
+  A7
+
+
+// Good
+def test5 =
+  λT λP
+
+  dup T0 T1 = T
+  dup P0 P1 = P
+  dup Q0 Q1 = Q
+
+  < λp p
+  : & (∀(P: T0) -> &P0 -> P1) ->
+      (∀(Q: T1) -> &Q0 -> Q1)>
+
+test5
 ";
 
   //  Creates initial term
@@ -89,6 +117,9 @@ test4
   println!("normal:\n{}", show(&inet, ROOT));
   println!("{:?} rewrites", inet.rules);
   println!("");
+
+  //println!("λ-normal:\n{}", lambda_term_from_inet(&inet));
+  //println!("");
 
   println!("check:\n{}", check(&mut inet, ROOT));
   println!("");
