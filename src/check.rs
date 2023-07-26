@@ -245,3 +245,130 @@ fn equiv(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, binder: bool) -> bool 
 
   return false;
 }
+
+
+
+
+pub fn chk(inet: &mut INet, a: &mut Cursor, b: &mut Cursor, bind: bool) -> bool {
+  println!("- leap {}:{} {}:{} | {:?} {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path);
+
+  reduce(inet, a.prev);
+
+  //println!("leaps: {}:{} ~ {}:{}\n  path: {:?} | {:?}\n  logs: {:?} | {:?}", addr(a.prev), slot(a.prev), addr(b.prev), slot(b.prev), a.path, b.path, a.logs, b.logs);
+  let a_next = enter(inet, a.prev);
+  let a_slot = slot(a_next);
+  let a_kind = kind(inet, addr(a_next));
+  let a_halt = a_next == a.init || a_next == ROOT || a_kind == ERA;
+  let b_next = enter(inet, b.prev);
+  let b_slot = slot(b_next);
+  let b_kind = kind(inet, bddr(a_next));
+  let b_halt = b_next == b.init || b_next == ROOT || b_kind == ERA;
+
+  // If end of leap, return true
+  if a_halt && b_halt {
+    return true;
+  }
+
+  // If 'a' entering main port...
+  if a_slot == 0 {
+    // If deque isn't empty, pop_back a slot and move to it
+    if let Some(slot) = a.pop_back(a_kind) {
+      //a.logs.push(format!("W{}", slot));
+      let a2 = &mut a.step(inet, slot);
+      let eq = chk(inet, a2, b, bind);
+      //a.logs.pop();
+      a.push_back(a_kind, slot);
+      return eq;
+
+    // If deque is empty, move to slots [1,2] and push_front to the *other* deque
+    } else {
+      for slot in [2,1] {
+        //a.logs.push(format!("V{}", slot));
+        b.push_front(a_kind, slot);
+        let a2 = &mut a.step(inet, slot);
+        let eq = chk(inet, a2, b, bind);
+        //a.logs.pop();
+        b.pop_front(a_kind);
+        if !eq { return false; }
+      }
+      return true;
+    }
+  }
+
+  // If 'b' entering main port...
+  if b_slot == 0 {
+    // If deque isn't empty, pop_back a slot and move to it
+    if let Some(slot) = b.pop_back(b_kind) {
+      //a.logs.push(format!("W{}", slot));
+      let b2 = &mut b.step(inet, slot);
+      let eq = chk(inet, a, b2, bind);
+      //a.logs.pop();
+      b.push_back(b_kind, slot);
+      return eq;
+
+    // If deque is empty, move to slots [1,2] and push_front to the *other* deque
+    } else {
+      for slot in [2,1] {
+        //b.logs.push(format!("V{}", slot));
+        a.push_front(b_kind, slot);
+        let b2 = &mut b.step(inet, slot);
+        let eq = chk(inet, a, b2, bind);
+        //a.logs.pop();
+        a.pop_front(b_kind);
+        if !eq { return false; }
+      }
+      return true;
+    }
+  }
+
+  if a_kind != CON {
+    //a.logs.push(format!("^{}", a_slot));
+    a.push_back(a_kind, slot(enter(inet, a.prev)) as u8);
+    let an = &mut a.step(inet, 0);
+    let eq = chk(inet, an, b, bind);
+    a.pop_back(a_kind);
+    //a.logs.pop();
+    return eq;
+  }
+
+  if b_kind != CON {
+    //a.logs.push(format!("^{}", a_slot));
+    a.push_back(a_kind, slot(enter(inet, a.prev)) as u8);
+    let an = &mut a.step(inet, 0);
+    let eq = chk(inet, an, b, bind);
+    a.pop_back(a_kind);
+    //a.logs.pop();
+    return eq;
+  }
+
+  if a_kind == CON && b_kind == CON {
+    //a.logs.push(format!("^{}", a_slot));
+    a.push_back(a_kind, slot(enter(inet, a.prev)) as u8);
+    let an = &mut a.step(inet, 0);
+    let eq = chk(inet, an, b, bind);
+    a.pop_back(a_kind);
+    //a.logs.pop();
+    return eq;
+  }
+
+  // Binder
+  if bind {
+    return chk(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), true);
+  }
+
+  // Variable
+  if a_slot == 1 && b_slot == 1 {
+    return chk(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), true);
+  }
+
+  // Application
+  if a_slot == 2 && b_slot == 2 {
+    println!("checking arguments... {}:{} {}:{}", addr(a_next), 1, addr(b_next), 1);
+    if !equal(inet, port(addr(a_next), 1), port(addr(b_next), 1)) {
+      return false;
+    } else {
+      return chk(inet, &mut a.step(inet, 0), &mut b.step(inet, 0), binder);
+    }
+  }
+
+}
