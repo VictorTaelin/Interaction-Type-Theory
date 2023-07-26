@@ -170,10 +170,15 @@ pub fn inject(inet: &mut INet, term: &Term, host: Port) {
       // - 2: points to the output type of the arrow.
       &Arr { ref inp, ref out } => {
         let arr = new_node(net, CON);
-        let inp = encode_term(net, inp, port(arr, 1), scope, vars);
-        link(net, port(arr, 1), inp);
-        let out = encode_term(net, out, port(arr, 2), scope, vars);
-        link(net, port(arr, 2), out);
+        let c_i = new_node(net, CHK);
+        let c_o = new_node(net, CHK);
+        let inp = encode_term(net, inp, port(c_i, 1), scope, vars);
+        let out = encode_term(net, out, port(c_o, 1), scope, vars);
+        link(net, port(arr, 1), port(c_i, 0));
+        link(net, port(arr, 2), port(c_o, 0));
+        link(net, port(c_i, 2), port(c_o, 2));
+        link(net, port(c_i, 1), inp);
+        link(net, port(c_o, 1), out);
         port(arr, 0)
       },
       // Forall nodes become the following net:
@@ -183,54 +188,24 @@ pub fn inject(inet: &mut INet, term: &Term, host: Port) {
       // - dup = DUP d {X} c
       // Using the same conventions as Pol.
       &All { ref nam, ref inp, ref out } => {
-        // new rev
-        // random u32 from 0 til 65536:
-        //let rnd = rand::random::<u32>() % 256;
-        //let all = new_node(net, CON);
-        //let an0 = new_node(net, ANN);
-        //let an1 = new_node(net, ANN);
-        //let dup = new_node(net, DUP + 100);
-        //link(net, port(an0, 0), port(all, 1));
-        //link(net, port(an0, 1), port(an1, 1));
-        //link(net, port(an0, 2), port(dup, 0));
-        //scope.insert(nam.to_vec(), port(dup, 2));
-        //let inp = encode_term(net, inp, port(an1, 0), scope, vars);
-        //link(net, port(an1, 0), inp);
-        //link(net, port(an1, 2), port(dup, 1));
-        //let out = encode_term(net, out, port(all, 2), scope, vars);
-        //link(net, port(all, 2), out);
-        //port(all, 0)
-
-        // new
-        //let all = new_node(net, CON);
-        //let an0 = new_node(net, ANN);
-        //let an1 = new_node(net, ANN);
-        //let dup = new_node(net, DUP);
-        //scope.insert(nam.to_vec(), port(dup, 1));
-        //let inp = encode_term(net, inp, port(an1, 0), scope, vars);
-        //let out = encode_term(net, out, port(all, 2), scope, vars);
-        //link(net, port(all, 1), port(an0, 0));
-        //link(net, port(an0, 1), port(dup, 0));
-        //link(net, port(an0, 2), port(an1, 2));
-        //link(net, port(an1, 0), inp);
-        //link(net, port(an1, 1), port(dup, 2));
-        //link(net, port(all, 2), out);
-        //port(all, 0)
-
-        // old
         let all = new_node(net, CON);
         let an0 = new_node(net, ANN);
         let an1 = new_node(net, ANN);
+        let c_i = new_node(net, CHK);
+        let c_o = new_node(net, CHK);
         let dup = new_node(net, DUP + 1);
-        link(net, port(an0, 0), port(all, 1));
+        link(net, port(c_i, 2), port(c_o, 2));
+        link(net, port(c_i, 0), port(all, 1));
+        link(net, port(c_o, 0), port(all, 2));
+        link(net, port(an0, 0), port(c_i, 1));
         link(net, port(an0, 1), port(an1, 1));
         link(net, port(an0, 2), port(dup, 2));
         scope.insert(nam.to_vec(), port(dup, 1));
         let inp = encode_term(net, inp, port(an1, 0), scope, vars);
         link(net, port(an1, 0), inp);
         link(net, port(an1, 2), port(dup, 0));
-        let out = encode_term(net, out, port(all, 2), scope, vars);
-        link(net, port(all, 2), out);
+        let out = encode_term(net, out, port(c_o, 1), scope, vars);
+        link(net, port(c_o, 1), out);
         port(all, 0)
       },
       // Polymorphism nodes become the following net:
@@ -240,14 +215,19 @@ pub fn inject(inet: &mut INet, term: &Term, host: Port) {
       &Pol { ref nam, ref out } => {
 
         let pol = new_node(net, CON);
+        let c_i = new_node(net, CHK);
+        let c_o = new_node(net, CHK);
         let ann = new_node(net, ANN);
-        link(net, port(ann, 0), port(pol, 1));
+        link(net, port(c_i, 2), port(c_o, 2));
+        link(net, port(c_i, 0), port(pol, 1));
+        link(net, port(c_o, 0), port(pol, 2));
+        link(net, port(ann, 0), port(c_i, 1));
         let era = new_node(net, ERA);
         link(net, port(era, 1), port(era, 2));
         link(net, port(ann, 2), port(era, 0));
         scope.insert(nam.to_vec(), port(ann, 1));
-        let out = encode_term(net, out, port(pol, 2), scope, vars);
-        link(net, port(pol, 2), out);
+        let out = encode_term(net, out, port(c_o, 1), scope, vars);
+        link(net, port(c_o, 1), out);
         port(pol, 0)
 
         //let pol = new_node(net, CON);
@@ -961,7 +941,7 @@ pub fn lambda_term_to_inet(term : &Term) -> INet {
 }
 
 // Converts a net to a *full* lambda term.
-pub fn lambda_term_from_inet(inet : &INet) -> Term {
+pub fn lambda_term_from_inet(inet: &INet, init: Port) -> Term {
   fn go(inet : &INet, node_depth : &mut Vec<u32>, next : Port, exit : &mut Vec<Port>, depth : u32) -> Term {
     let prev_port = enter(inet, next);
     let prev_slot = slot(prev_port);
@@ -1003,5 +983,5 @@ pub fn lambda_term_from_inet(inet : &INet) -> Term {
   let mut node_depth : Vec<u32> = Vec::with_capacity(inet.nodes.len() / 4);
   let mut exit : Vec<u32> = Vec::new();
   node_depth.resize(inet.nodes.len() / 4, 0);
-  go(inet, &mut node_depth, ROOT, &mut exit, 0)
+  go(inet, &mut node_depth, init, &mut exit, 0)
 }

@@ -50,7 +50,7 @@ fn main() {
   // Normalizes
   normal(&mut inet, ROOT);
 
-  println!("{}", show(&inet, ROOT));
+  println!("{}", show(&inet));
   println!("\x1b[90m{:?} rewrites\x1b[0m", inet.rules);
 
   println!("Check? \n{}", if check(&mut inet, ROOT) { "✓" } else { "✗" });

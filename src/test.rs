@@ -33,9 +33,8 @@ def unit =
 // ----
 
 def Bool =
-  dup PA PB = P;
-  dup P0 P1 = PA;
-  dup P2 P3 = PB;
+  dup PA P0 = P;
+  dup P1 P2 = PA;
   ∀P -> &P0 -> &P1 -> P2
 
 def true =
@@ -89,7 +88,7 @@ def type =
 
 // Good
 def test5 =
-  λT λP
+  λT
 
   dup T0 T1 = T
   dup P0 P1 = P
@@ -101,27 +100,13 @@ def test5 =
   >
 
 // ...
-def test6 =
-  λP
-  dup P0 P1 = P
-
-  < λx x
-  : &(P0 λt0 λf0 t0) -> (P1 λt1 λf1 t1)
+def test6 = λB λT
+  dup A0 A1 = A
+  < λa λx x
+  : ∀(A: &B -> T) -> &(A0 λat λaf at) -> (A1 λbt λbf bt)
   >
   
-//({((a (* a)) [c d]) ((e (* e)) [g d])}
-//(c g))
-
 test6
-
-
-//( [a {{[b c] [d c]} *}]
-//( (({{[f {{g *} *}] [j {{* l} *}]} {[n {{g l} *}] *}} (f (j n))) a)
-//(b
-  //d)))
-
-
-
 
 ";
 
@@ -133,11 +118,13 @@ test6
   let mut inet = new_inet();
   inject(&mut inet, &term, ROOT);
 
+  println!("input:\n{}", show(&inet));
+
   // Normal
   normal(&mut inet, ROOT);
   //println!("itt {}", readback(&inet, ROOT));
 
-  println!("normal:\n{}", show(&inet, ROOT));
+  println!("normal:\n{}", show(&inet));
   println!("{:?} rewrites", inet.rules);
   println!("");
 
@@ -146,5 +133,17 @@ test6
 
   println!("check:\n{}", check(&mut inet, ROOT));
   println!("");
+  
+  //tests equality, using `main = λx (x A B)`
+  //let a = enter(&inet, ROOT);
+  //let a = enter(&inet, port(addr(a), 2));
+  //let a = enter(&inet, port(addr(a), 0));
+  //let a = enter(&inet, port(addr(a), 1));
+  //let a = enter(&inet, a);
+  //let b = enter(&inet, ROOT);
+  //let b = enter(&inet, port(addr(b), 2));
+  //let b = enter(&inet, port(addr(b), 1));
+  //let b = enter(&inet, b);
+  //println!("equal ({}) = ({}) ? {}", lambda_term_from_inet(&inet, a), lambda_term_from_inet(&inet, b), equal(&mut inet, a, b));
 }
 

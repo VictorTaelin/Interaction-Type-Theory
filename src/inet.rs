@@ -11,9 +11,10 @@ pub struct INet {
 pub const TAG : u32 = 28;
 pub const ERA : u32 = 0;
 pub const ANN : u32 = 1;
-pub const CON : u32 = 2;
-pub const FIX : u32 = 3;
-pub const DUP : u32 = 4;
+pub const CHK : u32 = 2;
+pub const CON : u32 = 3;
+pub const FIX : u32 = 4;
+pub const DUP : u32 = 5;
 
 // ROOT is port 1 on address 0.
 pub const ROOT : u32 = 1;
@@ -45,6 +46,14 @@ pub fn new_node(inet: &mut INet, kind: u32) -> u32 {
   inet.nodes[port(node, 2) as usize] = port(node, 2);
   inet.nodes[port(node, 3) as usize] = kind;
   return node;
+}
+
+pub fn erase(inet: &mut INet, node: u32) {
+  inet.reuse.push(node);
+  inet.nodes[port(node, 0) as usize] = 0;
+  inet.nodes[port(node, 1) as usize] = 0;
+  inet.nodes[port(node, 2) as usize] = 0;
+  inet.nodes[port(node, 3) as usize] = 0;
 }
 
 // Builds a port (an address / slot pair).
@@ -134,19 +143,19 @@ pub fn normal(inet: &mut INet, root: Port) {
 }
 
 // Annihilation interaction.
-fn annihilate(inet: &mut INet, x: Port, y: Port) {
+fn annihilate(inet: &mut INet, x: u32, y: u32) {
   let p0 = enter(inet, port(x, 1));
   let p1 = enter(inet, port(y, 1));
   link(inet, p0, p1);
   let p0 = enter(inet, port(x, 2));
   let p1 = enter(inet, port(y, 2));
   link(inet, p0, p1);
-  inet.reuse.push(x);
-  inet.reuse.push(y);
+  erase(inet, x);
+  erase(inet, y);
 }
 
 // Commute interaction.
-fn commute(inet: &mut INet, x: Port, y: Port) {
+fn commute(inet: &mut INet, x: u32, y: u32) {
   let t = kind(inet, x);
   let a = new_node(inet, t);
   let t = kind(inet, y);
@@ -183,17 +192,18 @@ pub fn rewrite(inet: &mut INet, x: Port, y: Port) {
 }
 
 // Debugger
-pub fn show(inet: &INet, prev: Port) -> String {
+
+pub fn show(inet: &INet) -> String {
   use std::collections::BTreeMap;
-  pub fn go(inet: &INet, prev: Port, names: &mut BTreeMap<u32,String>) -> String {
+  pub fn tree(inet: &INet, prev: Port, names: &mut BTreeMap<u32,String>) -> String {
     let next = enter(inet, prev);
     if next == ROOT {
-      "".to_string()
+      "@".to_string()
     } else {
       let slot_next = slot(next);
       if slot_next == 0 {
-        let a = go(inet, port(addr(next), 1), names);
-        let b = go(inet, port(addr(next), 2), names);
+        let a = tree(inet, port(addr(next), 1), names);
+        let b = tree(inet, port(addr(next), 2), names);
         let k = kind(inet, addr(next));
         if k == ERA {
           format!("*")
@@ -202,13 +212,15 @@ pub fn show(inet: &INet, prev: Port) -> String {
             ('(', ')')
           } else if k == ANN {
             ('[', ']')
+          } else if k == CHK {
+            ('<', '>')
           } else if k >= DUP {
             ('{', '}')
           } else {
             ('?', '?')
           };
           //format!("{}\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", "", p.0, a, b, p.1)
-          format!("{}\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", addr(next), p.0, a, b, p.1)
+          format!("\x1b[2m{}\x1b[0m\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", addr(next), p.0, a, b, p.1)
         }
       } else {
         if let Some(name) = names.get(&prev) {
@@ -222,5 +234,22 @@ pub fn show(inet: &INet, prev: Port) -> String {
       }
     }
   }
-  return go(inet, prev, &mut BTreeMap::new());
+  let mut names = &mut BTreeMap::new();
+  let mut lines = String::new();
+  for index in 1 .. (inet.nodes.len() / 4) as u32 {
+    let prev = port(index, 0);
+    if enter(inet, prev) != 0 {
+      let next = enter(inet, prev);
+      if next == ROOT {
+        lines.push_str(&format!("@─{}\n", tree(inet, next, names)));
+      } else if kind(inet, addr(next)) == ERA {
+        lines.push_str(&format!("x─{}\n", tree(inet, next, names)));
+      } else if prev < next && slot(prev) == 0 && slot(next) == 0 {
+        lines.push_str(&format!("┌─{}\n", tree(inet, prev, names)));
+        lines.push_str(&format!("└─{}\n", tree(inet, next, names)));
+      }
+    }
+  }
+  return lines;
 }
+
