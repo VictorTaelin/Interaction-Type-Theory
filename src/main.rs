@@ -46,10 +46,12 @@ fn main() {
   let mut inet = new_inet();
   inject(&mut inet, &term, ROOT);
 
+  println!("input:\n{}", show(&inet));
+
   // Normalizes
   eager(&mut inet);
 
-  println!("{}", show(&inet));
+  println!("normal:\n{}", show(&inet));
   println!("\x1b[90m{:?} rewrites\x1b[0m", inet.rules);
 
   let term = syntax::from_string(code.as_bytes());

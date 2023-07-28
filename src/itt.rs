@@ -249,7 +249,7 @@ pub fn compare(inet: &mut INet, step: u32, flip: bool,
   b0: Port, bR: Port, bP: &mut Path, bL: &mut Logs,
 ) -> bool {
   // FIXME: still can't handle loops, so we just halt deep recs for now
-  let halt = 64;
+  let halt = 4096;
   let step = step + 1;
 
   let a1 = enter(inet, a0);
@@ -268,7 +268,13 @@ pub fn compare(inet: &mut INet, step: u32, flip: bool,
     } else {
       let av = aP.get(&CON).map_or(0, |vec| vec.len());
       let bv = bP.get(&CON).map_or(0, |vec| vec.len());
-      return av == bv;
+      if av == bv {
+        return true;
+      } else {
+        //println!(">> not equal: {} {} | {:?} {:?}", av, bv, aL, bL);
+        //println!("{}", show(inet));
+        return false;
+      }
     }
   }
 
@@ -300,7 +306,7 @@ pub fn compare(inet: &mut INet, step: u32, flip: bool,
 
   // If entering an aux port, push_back that slot to the deque, and move to the main port
   if aS > 0 {
-    aL.push(format!("up({})", aS));
+    aL.push(format!("up({}:{})", addr(a1), aS));
     aP.entry(aK).or_default().push_back(slot(enter(inet, a0)) as u8);
     let a0 = port(addr(enter(inet, a0)), 0);
     let eq = compare(inet, step, flip, a0, aR, aP, aL, b0, bR, bP, bL);
