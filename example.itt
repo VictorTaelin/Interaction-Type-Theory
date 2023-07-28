@@ -1,0 +1,82 @@
+// Check fn
+// --------
+
+def fn =
+  λf (f λx x)
+
+// Unit
+// ----
+
+def Unit =
+  dup P0 P1 = P
+  ∀P -> &P0 -> P1
+
+def unit =
+  λP λu u
+
+// Bool
+// ----
+
+def Bool =
+  dup #bool PA P0 = P;
+  dup #bool P1 P2 = PA;
+  ∀P -> &P0 -> &P1 -> P2
+
+def true =
+  λP λt λf t
+
+def false =
+  λP λt λf f
+
+// Tests
+// -----
+
+// chk
+// test0 : Bool = true
+def test0 =
+  <true : Bool>
+
+// err
+// test1 : Unit = true
+def test1 =
+  <true : Unit>
+
+// chk
+// test2 : ∀A B. A -> B -> A
+//       = λA λB λx λy x
+def test2 =
+  dup A0 A1 = A
+  dup B0 B1 = B
+  < λa λb λx λy x
+  : ∀A -> ∀B -> &A0 -> &B0 -> A1 >
+
+// err
+// test3 : ∀A B. A -> B -> A
+//       = λA λB λx λy x
+def test3 =
+  dup A0 A1 = A
+  dup B0 B1 = B
+  < λa λb λx λy y
+  : ∀A -> ∀B -> &A0 -> &B0 -> A1 >
+
+// chk
+// test4 : ∀(P: @ -> @) -> P true -> P true
+//       = λP λx x
+def test4 =
+  dup P0 P1 = P
+  (fn < λp λx x
+      : ∀(P: &@ -> @) ->
+        &(P0 true) ->
+         (P1 true) >)
+
+// err
+// test4 : ∀(P: @ -> @) -> P true -> P false
+//       = λP λx x
+def test5 =
+  dup P0 P1 = P
+  (fn < λp λx x
+      : ∀(P: &@ -> @) ->
+        &(P0 true) ->
+         (P1 false) >)
+
+test4

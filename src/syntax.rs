@@ -3,12 +3,12 @@
 extern crate rand;
 
 use std::collections::*;
-use inet::*;
+use itt::*;
 use std;
 use self::rand::Rng;
 
 // Translations from CoC to ITT.
-// <Term> ::= <Lam> | <App> | <Sup> | <Dup> | <Fix> | <Ann> | <Arr> | <Pol> | <Var> | <Era>
+// <Term> ::= <Lam> | <App> | <Sup> | <Dup> | <Fix> | <Ann> | <Arr> | <Pol> | <Var> | <Any> | <Era>
 // <Lam>  ::= "λ" <Name> <Term>
 // <App>  ::= "(" <Term> <Term> ")"
 // <Ann>  ::= "<" <Term> ":" <Term> ")"
@@ -17,8 +17,9 @@ use self::rand::Rng;
 // <Arr>  ::= <Term> "->" <Term>
 // <All>  ::= "∀(" <Name> ":" <Term> ")" "->" <Term>
 // <Pol>  ::= "∀" <Name> <Term>
-// <Fix>  ::= "@" <Name> <Term>
+// <Fix>  ::= "%" <Name> <Term>
 // <Var>  ::= <Name>
+// <Any>  ::= "@"
 // <Era>  ::= "*"
 // <Name> ::= <alphanumeric_Name>
 // <Tag>  ::= <positive_integer>
@@ -55,8 +56,11 @@ pub enum Term {
   // Variables
   Var {nam: Vec<u8>}, 
 
+  // Any
+  Any,
+
   // Erasure
-  Era
+  Era,
 }
 
 use self::Term::{*};
@@ -312,6 +316,11 @@ pub fn inject(inet: &mut INet, term: &Term, host: Port) {
         //link(net, port(all, 2), out);
         //port(all, 0)
       },
+      &Any => {
+        let set = new_node(net, ANN);
+        link(net, port(set, 1), port(set, 2));
+        port(set, 0)
+      },
       &Era => {
         let set = new_node(net, ERA);
         link(net, port(set, 1), port(set, 2));
@@ -398,7 +407,7 @@ pub fn readback(net : &INet, host : Port) -> Term {
     seen.insert(next);
 
     match kind(net, addr(next)) {
-      // If we're visiting a set...
+      // If we're visiting a eraser...
       ERA => Era,
       // If we're visiting a con node...
       CON => match slot(next) {
@@ -427,9 +436,9 @@ pub fn readback(net : &INet, host : Port) -> Term {
       },
       // If we're visiting an ANN node...
       ANN => match slot(next) {
-        // If we're visiting a port 0, then it is an annotation...
+        // If we're visiting a port 0, then it is an Any...
         0 => {
-          panic!("Reached port 0 of an ANN node on readback. That shouldn't be possible.");
+          Any
         },
         // If we're visiting a port 1, then it is where the annotation occurs.
         _ => {
@@ -651,7 +660,8 @@ pub fn copy(space : &Vec<u8>, idx : u32, term : &Term) -> Term {
       let nam = namespace(space, idx, nam);
       Var{nam}
     },
-    Era => Era
+    Any => Any,
+    Era => Era,
   }
 }
 
@@ -763,8 +773,8 @@ pub fn parse_term<'a>(code: &'a Str, ctx: &mut Context<'a>, idx: &mut u32) -> (&
       let nxt = Box::new(nxt);
       (code, Dup { tag, fst, snd, val, nxt })
     }
-    // Fix: `@name body`
-    b'@' => {
+    // Fix: `%name body`
+    b'%' => {
       let (code, nam) = parse_name(&code[1..]);
       let (code, bod) = parse_term(code, ctx, idx);
       let nam = nam.to_vec();
@@ -800,6 +810,10 @@ pub fn parse_term<'a>(code: &'a Str, ctx: &mut Context<'a>, idx: &mut u32) -> (&
       narrow(ctx);
       let nam = nam.to_vec();
       (code, Pol { nam, out: Box::new(out) })
+    },
+    // Any: `@`
+    b'@' => {
+      (&code[1..], Any)
     },
     // Era: `*`
     b'*' => {
@@ -888,7 +902,7 @@ pub fn to_string(term : &Term) -> Vec<Chr> {
         stringify_term(code, &nxt);
       },
       &Fix{ref nam, ref bod} => {
-        code.extend_from_slice(b"@");
+        code.extend_from_slice(b"%");
         code.append(&mut nam.clone());
         code.extend_from_slice(b" ");
         stringify_term(code, &bod);
@@ -912,6 +926,9 @@ pub fn to_string(term : &Term) -> Vec<Chr> {
         code.append(&mut nam.clone());
         code.extend_from_slice(b" ");
         stringify_term(code, &out);
+      },
+      &Any => {
+        code.extend_from_slice(b"@");
       },
       &Era => {
         code.extend_from_slice(b"*");

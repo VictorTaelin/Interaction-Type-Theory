@@ -6,5 +6,5 @@
 #![allow(unused_parens)]
 #![allow(unused_variables)]
 
-pub mod term;
-pub mod inet;
+pub mod itt;
+pub mod syntax;

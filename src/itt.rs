@@ -13,6 +13,7 @@ pub struct INet {
 
 // Node types are consts because those are used in a Vec<u32>.
 pub const TAG : u32 = 28;
+pub const NIL : u32 = 0;
 pub const ORB : u32 = 1;
 pub const ERA : u32 = 2;
 pub const CON : u32 = 3;
@@ -57,7 +58,7 @@ pub fn erase(inet: &mut INet, node: u32) {
   inet.nodes[port(node, 0) as usize] = 0;
   inet.nodes[port(node, 1) as usize] = 0;
   inet.nodes[port(node, 2) as usize] = 0;
-  inet.nodes[port(node, 3) as usize] = 0;
+  inet.nodes[port(node, 3) as usize] = NIL;
 }
 
 // Builds a port (an address / slot pair).
@@ -94,6 +95,58 @@ pub fn kind(inet: &INet, node: u32) -> u32 {
 pub fn link(inet: &mut INet, ptr_a: u32, ptr_b: u32) {
   inet.nodes[ptr_a as usize] = ptr_b;
   inet.nodes[ptr_b as usize] = ptr_a;
+}
+
+// Annihilation interaction.
+// ---|\     /|---    ---, ,---
+//    | |---| |    =>     X
+// ---|/     \|---    ---' '---
+fn annihilate(inet: &mut INet, x: u32, y: u32) {
+  if kind(inet, x) == ORB && kind(inet, y) == ORB {
+    if !equal(inet, port(x,1), port(y,1)) {
+      println!("incoherent");
+      std::process::exit(0);
+    }
+    //println!("----------------------");
+    //println!("{}", show(inet));
+    //println!(">> COLLAPSE {} {} {}", x, y, equal(inet, port(x,1), port(y,1)));
+    //println!("----------------------");
+  }
+  let p0 = enter(inet, port(x, 1));
+  let p1 = enter(inet, port(y, 1));
+  link(inet, p0, p1);
+  let p0 = enter(inet, port(x, 2));
+  let p1 = enter(inet, port(y, 2));
+  link(inet, p0, p1);
+  erase(inet, x);
+  erase(inet, y);
+}
+
+// Commute interaction.
+//                        /|-------|\
+//                    ---|#|       | |---
+// ---|\     /|---        \|--, ,--|/
+//    | |---|#|    =>          X
+// ---|/     \|---        /|--' '--|\
+//                    ---|#|       | |---
+//                        \|-------|/
+fn commute(inet: &mut INet, x: u32, y: u32) {
+  let t = kind(inet, x);
+  let a = new_node(inet, t);
+  let t = kind(inet, y);
+  let b = new_node(inet, t);
+  let t = enter(inet, port(x, 1));
+  link(inet, port(b, 0), t);
+  let t = enter(inet, port(x, 2));
+  link(inet, port(y, 0), t);
+  let t = enter(inet, port(y, 1));
+  link(inet, port(a, 0), t);
+  let t = enter(inet, port(y, 2));
+  link(inet, port(x, 0), t);
+  link(inet, port(a, 1), port(b, 1));
+  link(inet, port(a, 2), port(y, 1));
+  link(inet, port(x, 1), port(b, 2));
+  link(inet, port(x, 2), port(y, 2));
 }
 
 // Reduces a wire to weak normal form.
@@ -146,90 +199,28 @@ pub fn normal(inet: &mut INet, root: Port) {
   }
 }
 
-// Collapse interaction.
-// -o-o- => -----
-//fn collapse(inet: &mut INet, x: u32, y: u32, x_flip: bool, y_flip: bool) {
-  //println!(">> collapse {} {}", x_flip, y_flip);
-  //let xk = if x_flip { 1 } else { 0 };
-  //let yk = if y_flip { 0 } else { 1 };
-  //let xv = enter(inet, port(x, xk));
-  //let yv = enter(inet, port(y, yk));
-  //link(inet, xv, yv);
-  //erase(inet, x);
-  //erase(inet, y);
-//}
-
-// Passthrough iteration.
-// ---|\        -o-|\
-//    | |-o- =>    | |---
-// ---|/        -o-|/
-//fn passthrough(inet: &mut INet, x: u32, y: u32, flip: bool) {
-  //println!(">> passthrough");
-  //let p1 = if flip { 1 } else { 0 };
-  //let p2 = if flip { 0 } else { 1 };
-  //let o1 = new_node(inet, ORB);
-  //let o2 = new_node(inet, ORB);
-  //let x1 = enter(inet, port(x, 1));
-  //link(inet, x1, port(o1, p1));
-  //link(inet, port(o1, p2), port(x, 1));
-  //let x2 = enter(inet, port(x, 2));
-  //link(inet, x2, port(o2, p1));
-  //link(inet, port(o2, p2), port(x, 2));
-  //let y2 = enter(inet, port(y, p2));
-  //link(inet, port(x, 0), y2);
-  //erase(inet, y);
-//}
-     
-// Annihilation interaction.
-// ---|\     /|---    ---, ,---
-//    | |---| |    =>     X
-// ---|/     \|---    ---' '---
-fn annihilate(inet: &mut INet, x: u32, y: u32) {
-  if kind(inet, x) == ORB && kind(inet, y) == ORB {
-    if !equal(inet, port(x,1), port(y,1)) {
-      println!("incoherent");
-      std::process::exit(0);
+// Eager reduction
+// FIXME: wrote this quickly to test the checker, obviously very inefficient
+pub fn eager(inet: &mut INet) {
+  let mut rules = 0;
+  loop {
+    let init_rules = rules;
+    for index in 0 .. (inet.nodes.len() / 4) as u32 {
+      let kind = kind(inet, index);
+      if kind != NIL {
+        let prev = port(index, 0);
+        let next = enter(inet, prev);
+        if slot(next) == 0 {
+          rules += 1;
+          rewrite(inet, prev, next);
+          break;
+        }
+      }
     }
-    //println!("----------------------");
-    //println!("{}", show(inet));
-    //println!(">> COLLAPSE {} {} {}", x, y, equal(inet, port(x,1), port(y,1)));
-    //println!("----------------------");
+    if rules == init_rules {
+      break;
+    }
   }
-  let p0 = enter(inet, port(x, 1));
-  let p1 = enter(inet, port(y, 1));
-  link(inet, p0, p1);
-  let p0 = enter(inet, port(x, 2));
-  let p1 = enter(inet, port(y, 2));
-  link(inet, p0, p1);
-  erase(inet, x);
-  erase(inet, y);
-}
-
-// Commute interaction.
-//                        /|-------|\
-//                    ---|#|       | |---
-// ---|\     /|---        \|--, ,--|/
-//    | |---|#|    =>          X
-// ---|/     \|---        /|--' '--|\
-//                    ---|#|       | |---
-//                        \|-------|/
-fn commute(inet: &mut INet, x: u32, y: u32) {
-  let t = kind(inet, x);
-  let a = new_node(inet, t);
-  let t = kind(inet, y);
-  let b = new_node(inet, t);
-  let t = enter(inet, port(x, 1));
-  link(inet, port(b, 0), t);
-  let t = enter(inet, port(x, 2));
-  link(inet, port(y, 0), t);
-  let t = enter(inet, port(y, 1));
-  link(inet, port(a, 0), t);
-  let t = enter(inet, port(y, 2));
-  link(inet, port(x, 0), t);
-  link(inet, port(a, 1), port(b, 1));
-  link(inet, port(a, 2), port(y, 1));
-  link(inet, port(x, 1), port(b, 2));
-  link(inet, port(x, 2), port(y, 2));
 }
 
 // Rewrites an active pair.
@@ -335,24 +326,25 @@ pub fn show_tree(inet: &INet, prev: Port, names: &mut BTreeMap<u32,String>) -> S
     //return format!("\x1b[2m{}\x1b[0m${}", addr(next), show_tree(inet, port(addr(next), 1), names));
   //}
   if slot(next) == 0 {
-    if kind == ERA {
-      return format!("*");
-    } else {
+    //if kind == ERA {
+      //return format!("*");
+    //} else {
       let a = show_tree(inet, port(addr(next), 1), names);
       let b = show_tree(inet, port(addr(next), 2), names);
       let p = match kind {
+        ERA => ('«', '»'),
         CON => ('(', ')'),
         ANN => ('[', ']'),
         ORB => ('<', '>'),
         _   => ('{', '}'),
       };
       return format!("\x1b[2m{}\x1b[0m\x1b[1m{}\x1b[0m{} {}\x1b[1m{}\x1b[0m", addr(next), p.0, a, b, p.1);
-    }
+    //}
   }
   if let Some(name) = names.get(&prev) {
     return name.to_string();
   } else {
-    let name = crate::term::index_to_name(names.len() as u32 + 1);
+    let name = crate::syntax::index_to_name(names.len() as u32 + 1);
     let name = String::from_utf8_lossy(&name).to_string();
     //let name = format!("{}#{}:{}", name, addr(next), slot(next));
     names.insert(next, name.clone());
@@ -372,7 +364,7 @@ pub fn show(inet: &INet) -> String {
         lines.push_str(&format!("^─{}\n", show_tree(inet, next, names)));
       //} else if kind == ERA {
         //lines.push_str(&format!("*─{}\n", show_tree(inet, next, names)));
-      } else if addr(prev) < addr(next) && kind != ERA && slot(prev) == 0 && slot(next) == 0 {
+      } else if addr(prev) < addr(next) && slot(prev) == 0 && slot(next) == 0 {
         lines.push_str(&format!("┌─{}\n", show_tree(inet, prev, names)));
         lines.push_str(&format!("└─{}\n", show_tree(inet, next, names)));
       }
