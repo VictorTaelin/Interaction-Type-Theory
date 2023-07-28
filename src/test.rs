@@ -1,7 +1,6 @@
 use crate::main;
 use crate::term::*;
 use crate::inet::*;
-use crate::check::*;
 
 pub fn get_body(inet: &INet, host: Port) -> Port {
   return port(addr(enter(inet,host)), 2);
@@ -103,10 +102,23 @@ def test5 =
 def test6 = λB λT
   dup A0 A1 = A
   < λa λx x
-  : ∀(A: &B -> T) -> &(A0 λat λaf at) -> (A1 λbt λbf bt)
+  : ∀(A: &B -> T) -> &(A0 λt0 λf0 t0) -> (A1 λt1 λf1 t1)
   >
   
-test6
+def test7 =
+  dup P0 P1 = P
+  < λp λx x
+  : ∀P -> &P0 -> P1
+  >
+
+def test8 =
+  dup A0 A1 = A
+  dup B0 B1 = B
+  < λa λb λx λy x
+  : ∀A -> ∀B -> &A0 -> &B0 -> A1
+  >
+
+test8
 
 ";
 
@@ -131,8 +143,8 @@ test6
   //println!("λ-normal:\n{}", lambda_term_from_inet(&inet));
   //println!("");
 
-  println!("check:\n{}", check(&mut inet, ROOT));
-  println!("");
+  //println!("check:\n{}", check(&mut inet, ROOT));
+  //println!("");
   
   //tests equality, using `main = λx (x A B)`
   //let a = enter(&inet, ROOT);

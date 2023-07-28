@@ -1,21 +1,20 @@
 #![allow(dead_code)]
+#![allow(non_snake_case)]
+#![allow(unreachable_code)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unused_parens)]
 #![allow(unused_variables)]
-#![allow(unreachable_code)]
 
 extern crate clap;
 use clap::{Arg, App};
 
 mod term;
 mod inet;
-mod check;
 mod test;
 
 use inet::*;
 use term::*;
-use check::*;
 
 use std::io;
 use std::io::prelude::*;
@@ -53,8 +52,8 @@ fn main() {
   println!("{}", show(&inet));
   println!("\x1b[90m{:?} rewrites\x1b[0m", inet.rules);
 
-  println!("Check? \n{}", if check(&mut inet, ROOT) { "✓" } else { "✗" });
-  println!("");
+  //println!("Check? \n{}", if check(&mut inet, ROOT) { "✓" } else { "✗" });
+  //println!("");
 
   let term = term::from_string(code.as_bytes());
   let (norm, rules) = term::normalize(&term);
