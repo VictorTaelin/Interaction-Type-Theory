@@ -72,9 +72,11 @@ def test4 =
 // TODO: should err, but chks
 def test5 =
   dup P0 P1 = P
-  (fn < λp λx x
-      : ∀(P: &@ -> @) ->
-        &(P0 false) ->
-         (P1 true) >)
+  (< λp λx x
+   : ∀(P: &Bool -> @) ->
+     &(P0 true) ->
+      (P1 false) >
+  λk (k * @))
+
 
 test5
