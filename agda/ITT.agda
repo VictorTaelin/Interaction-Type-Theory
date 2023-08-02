@@ -74,6 +74,10 @@ data Node : Set where
 Graph : Set
 Graph = List Node
 
+-- An active pair is two indices connected by their main ports
+ActivePair : Set
+ActivePair = Pair Nat Nat
+
 -- Gets the node at index 'i'
 get : Nat -> Graph -> Node
 get zero     (node , graph) = node
@@ -145,8 +149,8 @@ comm-rule a1 a2 b1 b2 graph =
   (A1 , A2 , B1 , B2 , graph)
 
 -- Performs an interaction on indices 'i', 'j'
-interact : Nat -> Nat -> Graph -> Graph
-interact i j graph with (get i graph) | (get j graph)
+interact : ActivePair -> Graph -> Graph
+interact (pair i j) graph with (get i graph) | (get j graph)
 ... | (con a0 a1 a2) | (con b0 b1 b2) = anni-rule a1 a2 b1 b2 (set i air (set j air graph))
 ... | (con a0 a1 a2) | (dup b0 b1 b2) = comm-rule a1 a2 b1 b2 (set i air (set j air graph))
 ... | (dup a0 a1 a2) | (con b0 b1 b2) = comm-rule b1 b2 a1 a2 (set i air (set j air graph))
@@ -154,22 +158,43 @@ interact i j graph with (get i graph) | (get j graph)
 ... | a              | b              = graph
 
 -- Finds the active pairs of a graph
-active-pairs : Graph -> List (Pair Nat Nat)
-active-pairs graph = go zero (λ x -> none) graph where
-  go : Nat -> (Var -> Maybe Nat) -> Graph -> List (Pair Nat Nat) 
-  ln : Nat -> (Var -> Maybe Nat) -> Graph -> Var -> List (Pair Nat Nat) 
-  go i j-of nil                    = nil
-  go i j-of (air          , graph) = go (succ i) j-of graph
-  go i j-of (era a0       , graph) = ln i j-of graph a0
-  go i j-of (con a0 a1 a2 , graph) = ln i j-of graph a0
-  go i j-of (dup a0 a1 a2 , graph) = ln i j-of graph a0
-  ln i j-of graph a0 with j-of a0
-  ... | none   = go (succ i) (λ b0 -> if (eq a0 b0) (some i) (j-of b0)) graph
-  ... | some j = pair j i , go (succ i) j-of graph
+active-pairs : Graph -> List ActivePair
+active-pairs graph = find zero empty graph where
+
+  -- Maps variables to indices where they occur
+  Map : Set
+  Map = Var -> Maybe Nat
+
+  -- Empty map
+  empty : Map
+  empty = λ x -> none
+
+  -- Extends a map with a (idx,var) pair
+  ext : Nat -> Var -> Map -> Map
+  ext idx var map = λ x -> if (eq x var) (some idx) (map x)
+
+  -- Registers an active pair, when found
+  reg : Maybe Nat -> Nat -> List ActivePair -> List ActivePair
+  reg none     j xs = xs
+  reg (some i) j xs = pair i j , xs
+
+  -- Finds and collects all active pairs
+  find : Nat -> Map -> Graph -> List ActivePair
+  find i map nil                    = nil
+  find i map (air          , graph) = find (succ i) map graph
+  find i map (era a0       , graph) = reg (map a0) i (find (succ i) (ext i a0 map) graph) 
+  find i map (con a0 a1 a2 , graph) = reg (map a0) i (find (succ i) (ext i a0 map) graph)
+  find i map (dup a0 a1 a2 , graph) = reg (map a0) i (find (succ i) (ext i a0 map) graph)
 
 -- Performs a parallel reduction of all active pairs
 reduce : Graph -> Graph
-reduce graph = foldr (λ{ (pair i j) -> interact i j }) graph (active-pairs graph)
+reduce graph = foldr interact graph (active-pairs graph)
+
+
+
+
+
+
 
 main : _
 main =
@@ -178,4 +203,4 @@ main =
   let g = con 2 4 4 , g in
   let g = con 0 2 3 , g in
   let g = con 3 5 5 , g in
-  reduce g
+  active-pairs g
