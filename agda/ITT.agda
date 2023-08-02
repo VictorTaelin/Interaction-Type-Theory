@@ -110,6 +110,19 @@ fresh (era a0       , graph) = max (succ a0) (fresh graph)
 fresh (con a0 a1 a2 , graph) = max (succ a0) (max (succ a1) (max (succ a2) (fresh graph)))
 fresh (dup a0 a1 a2 , graph) = max (succ a0) (max (succ a1) (max (succ a2) (fresh graph)))
 
+-- *x
+-- (x a1 a2)
+-- --------- erasure rule
+-- *a1
+-- *a2
+eras-rule : Nat -> Nat -> Graph -> Graph
+eras-rule a1 a2 graph =
+  -- Creates the 2 eraser nodes
+  let E1 = era a1 in
+  let E2 = era a2 in
+  -- Returns result
+  (E1 , E2 , graph)
+
 -- (x a1 a2)
 -- (x b1 b1)
 -- --------- annihilation rule
@@ -150,12 +163,17 @@ comm-rule a1 a2 b1 b2 graph =
 
 -- Performs an interaction on indices 'i', 'j'
 interact : ActivePair -> Graph -> Graph
-interact (pair i j) graph with (get i graph) | (get j graph)
-... | (con a0 a1 a2) | (con b0 b1 b2) = anni-rule a1 a2 b1 b2 (set i air (set j air graph))
-... | (con a0 a1 a2) | (dup b0 b1 b2) = comm-rule a1 a2 b1 b2 (set i air (set j air graph))
-... | (dup a0 a1 a2) | (con b0 b1 b2) = comm-rule b1 b2 a1 a2 (set i air (set j air graph))
-... | (dup a0 a1 a2) | (dup b0 b1 b2) = anni-rule b1 b2 a1 a2 (set i air (set j air graph))
-... | a              | b              = graph
+interact (pair i j) g with get i g | get j g | set i air (set j air g)
+... | era a0       | era b0       | g = g
+... | era a0       | con b0 b1 b2 | g = eras-rule b1 b2       g
+... | era a0       | dup b0 b1 b2 | g = eras-rule b1 b2       g
+... | con a0 a1 a2 | era b0       | g = eras-rule a1 a2       g
+... | con a0 a1 a2 | con b0 b1 b2 | g = anni-rule a1 a2 b1 b2 g
+... | con a0 a1 a2 | dup b0 b1 b2 | g = comm-rule a1 a2 b1 b2 g
+... | dup a0 a1 a2 | era b0       | g = eras-rule a1 a2       g
+... | dup a0 a1 a2 | con b0 b1 b2 | g = comm-rule b1 b2 a1 a2 g
+... | dup a0 a1 a2 | dup b0 b1 b2 | g = anni-rule b1 b2 a1 a2 g
+... | a            | b            | g = a , b , g
 
 -- Finds the active pairs of a graph
 active-pairs : Graph -> List ActivePair
@@ -189,6 +207,10 @@ active-pairs graph = find zero empty graph where
 -- Performs a parallel reduction of all active pairs
 reduce : Graph -> Graph
 reduce graph = foldr interact graph (active-pairs graph)
+
+-- Analysis
+-- --------
+
 
 
 
