@@ -1,94 +1,64 @@
 -- Formalization of ITT in Agda
--- ----------------------------
+-- ============================
 
--- Core Dependencies
--- -----------------
-
-data Unit : Set where
-  unit : Unit
-
-data Bool : Set where
-  true  : Bool
-  false : Bool
-
-data Nat : Set where
-  zero : Nat
-  succ : Nat -> Nat
-{-# BUILTIN NATURAL Nat #-}
-
-data Maybe (a : Set) : Set where
-  none : Maybe a
-  some : a -> Maybe a
-
-data Pair (a b : Set) : Set where
-  pair : a -> b -> Pair a b
-
-data List (a : Set) : Set where
-  nil : List a
-  _,_ : a -> List a -> List a
-infixr 20 _,_
-
-if : ∀ {a : Set} -> Bool -> a -> a -> a
-if true  t f = t
-if false t f = f
-
-may : ∀ {a b : Set} -> Maybe b -> (b -> a) -> a -> a
-may (some x) s n = s x
-may none     s n = n
-
-eq : Nat -> Nat -> Bool
-eq zero      zero    = true
-eq (succ a)  zero    = false
-eq  zero    (succ b) = false
-eq (succ a) (succ b) = eq a b
-
-max : Nat -> Nat -> Nat
-max zero     b       = b
-max a        zero    = a
-max (succ a) (succ b) = succ (max a b)
-
-len : ∀ {a} -> List a -> Nat
-len nil      = 0
-len (x , xs) = succ (len xs)
-
-foldr : ∀ {a b : Set} -> (a -> b -> b) -> b -> List a -> b
-foldr f z nil      = z
-foldr f z (x , xs) = f x (foldr f z xs)
+open import Base
 
 -- Interaction Combinators
--- -----------------------
+-- =======================
 
 -- A variable is just an ID
 
 Var : Set
 Var = Nat
 
--- A node can be either air, an erasure, a constructor or a duplicator
+-- There are 3 node symbols: ERA, CON and DUP
+data Symbol : Set where
+  ERA : Symbol
+  CON : Symbol
+  DUP : Symbol
+
+-- A node can be an eraser, a constructor, or a duplicator
+--   ERA   #      CON      #      DUP     
+-- ======= # ============= # =============
+--         #       /|-- a2 #       /|-- a2
+-- a0 --[] # a0 --| |      # a0 --|||
+--         #       \|-- a1 #       \|-- a1
 data Node : Set where
-  air : Node
   era : Var -> Node
   con : Var -> Var -> Var -> Node
   dup : Var -> Var -> Var -> Node
 
 -- A graph is just a list of nodes
 Graph : Set
-Graph = List Node
+Graph = List (Maybe Node)
 
 -- An active pair is two indices connected by their main ports
-ActivePair : Set
-ActivePair = Pair Nat Nat
+IndexPair : Set
+IndexPair = Pair Nat Nat
+
+-- Gets a node's symbol
+symbol : Node -> Symbol
+symbol (era a0)       = ERA
+symbol (con a0 a1 a2) = CON
+symbol (dup a0 a1 a2) = DUP
+
+-- Counts nodes
+size : Graph -> Nat
+size nil            = zero
+size (none # graph) = size graph
+size (node # graph) = succ (size graph)
 
 -- Gets the node at index 'i'
-get : Nat -> Graph -> Node
-get zero     (node , graph) = node
-get (succ p) (node , graph) = get p graph
-get index    graph          = air
+get : Nat -> Graph -> Maybe Node
+get zero     (node # graph) = node
+get (succ p) (node # graph) = get p graph
+get index    graph          = none
 
 -- Sets the node at index 'i'
-set : Nat -> Node -> Graph -> Graph
+set : Nat -> Maybe Node -> Graph -> Graph
 set i        val nil            = nil
-set zero     val (node , graph) = val , graph
-set (succ p) val (node , graph) = node , set p val graph
+set zero     val (node # graph) = val # graph
+set (succ p) val (node # graph) = node # set p val graph
 
 -- Renames a variable 'x', from 'a' to 'b'
 rename : Var -> Var -> Var -> Var
@@ -96,38 +66,47 @@ rename a b x = if (eq a x) b x
 
 -- Globally renames 'a' by 'b' on the graph
 subst : Var -> Var -> Graph -> Graph
-subst a b nil                    = nil
-subst a b (air          , graph) = air , subst a b graph
-subst a b (era a0       , graph) = era (rename a b a0) , subst a b graph
-subst a b (con a0 a1 a2 , graph) = con (rename a b a0) (rename a b a1) (rename a b a2) , subst a b graph
-subst a b (dup a0 a1 a2 , graph) = dup (rename a b a0) (rename a b a1) (rename a b a2) , subst a b graph
+subst a b nil                           = nil
+subst a b (none                # graph) = none # subst a b graph
+subst a b (some (era a0)       # graph) = some (era (rename a b a0)) # subst a b graph
+subst a b (some (con a0 a1 a2) # graph) = some (con (rename a b a0) (rename a b a1) (rename a b a2)) # subst a b graph
+subst a b (some (dup a0 a1 a2) # graph) = some (dup (rename a b a0) (rename a b a1) (rename a b a2)) # subst a b graph
 
 -- Generates a fresh, unused variable
 fresh : Graph -> Var
-fresh nil                    = zero
-fresh (air          , graph) = fresh graph
-fresh (era a0       , graph) = max (succ a0) (fresh graph)
-fresh (con a0 a1 a2 , graph) = max (succ a0) (max (succ a1) (max (succ a2) (fresh graph)))
-fresh (dup a0 a1 a2 , graph) = max (succ a0) (max (succ a1) (max (succ a2) (fresh graph)))
+fresh nil                           = zero
+fresh (none                # graph) = fresh graph
+fresh (some (era a0)       # graph) = max (succ a0) (fresh graph)
+fresh (some (con a0 a1 a2) # graph) = max (succ a0) (max (succ a1) (max (succ a2) (fresh graph)))
+fresh (some (dup a0 a1 a2) # graph) = max (succ a0) (max (succ a1) (max (succ a2) (fresh graph)))
 
--- *x
--- (x a1 a2)
--- --------- erasure rule
--- *a1
--- *a2
+-- Gets the main port of a node
+get-main : Node -> Var
+get-main (era a0)       = a0
+get-main (con a0 a1 a2) = a0
+get-main (dup a0 a1 a2) = a0
+
+-- a1 ---|\      #
+--       | |--[] #
+-- a2 ---|/      # (x a1 a2) -x
+-- ============= # ============ Erasure
+-- a1 --------[] # -a1 -a2
+-- a2 --------[] # 
 eras-rule : Nat -> Nat -> Graph -> Graph
 eras-rule a1 a2 graph =
   -- Creates the 2 eraser nodes
-  let E1 = era a1 in
-  let E2 = era a2 in
+  let E1 = some (era a1) in
+  let E2 = some (era a2) in
   -- Returns result
-  (E1 , E2 , graph)
+  (E1 # E2 # graph)
 
--- (x a1 a2)
--- (x b1 b1)
--- --------- annihilation rule
--- a1 <- b1
--- a2 <- b2
+-- a1 ---|\     /|--- b2 #
+--       | |---| |       #
+-- a2 ---|/     \|--- b1 # (x a1 a2) (x b1 b2)
+-- ===================== # ===================== Annihilation
+-- a1 ------, ,------ b2 # [a1 <- b1] [a2 <- b2]
+--           X           #
+-- a2 ------' '------ b1 #
 anni-rule : Nat -> Nat -> Nat -> Nat -> Graph -> Graph
 anni-rule a1 a2 b1 b2 graph =
   -- Substitutes [a1 <- b1]
@@ -139,13 +118,17 @@ anni-rule a1 a2 b1 b2 graph =
   -- Returns result
   graph
 
--- (x a1 a2)
--- {x b1 b2}
--- ---------- commutation rule
--- {a1 x0 x1}
--- {a2 x2 x3}
--- (b1 x2 x0)
--- (b2 x3 x1)
+--   a1 ---|\     /|--- b2   #
+--         | |---|||         #
+--   a2 ---|/     \|--- b1   # (x a1 a2) {x b1 b2}
+-- ========================= # ===================== Commutation
+--        /|-------|\        # {a1 x0 x1} (b2 x3 x1)
+-- a1 ---|||       | |--- b2 # {a2 x2 x3} (b1 x2 x0)
+--        \|--, ,--|/        #
+--             X             #
+--        /|--' '--|\        #
+-- a2 ---|||       | |--- b1 #
+--        \|-------|/        #
 comm-rule : Nat -> Nat -> Nat -> Nat -> Graph -> Graph
 comm-rule a1 a2 b1 b2 graph =
   -- Generates 4 fresh vars, x0, x1, x2, x3
@@ -154,29 +137,29 @@ comm-rule a1 a2 b1 b2 graph =
   let x2 = succ x1 in 
   let x3 = succ x2 in 
   -- Creates the 4 commuted nodes
-  let A1 = dup a1 x0 x1 in
-  let A2 = dup a2 x2 x3 in
-  let B1 = con b1 x2 x0 in
-  let B2 = con b2 x3 x1 in
+  let A1 = some (dup a1 x0 x1) in
+  let A2 = some (dup a2 x2 x3) in
+  let B1 = some (con b1 x2 x0) in
+  let B2 = some (con b2 x3 x1) in
   -- Returns result
-  (A1 , A2 , B1 , B2 , graph)
+  (A1 # A2 # B1 # B2 # graph)
 
 -- Performs an interaction on indices 'i', 'j'
-interact : ActivePair -> Graph -> Graph
-interact (pair i j) g with get i g | get j g | set i air (set j air g)
-... | era a0       | era b0       | g = g
-... | era a0       | con b0 b1 b2 | g = eras-rule b1 b2       g
-... | era a0       | dup b0 b1 b2 | g = eras-rule b1 b2       g
-... | con a0 a1 a2 | era b0       | g = eras-rule a1 a2       g
-... | con a0 a1 a2 | con b0 b1 b2 | g = anni-rule a1 a2 b1 b2 g
-... | con a0 a1 a2 | dup b0 b1 b2 | g = comm-rule a1 a2 b1 b2 g
-... | dup a0 a1 a2 | era b0       | g = eras-rule a1 a2       g
-... | dup a0 a1 a2 | con b0 b1 b2 | g = comm-rule b1 b2 a1 a2 g
-... | dup a0 a1 a2 | dup b0 b1 b2 | g = anni-rule b1 b2 a1 a2 g
-... | a            | b            | g = a , b , g
+interact : IndexPair -> Graph -> Graph
+interact (pair i j) g with get i g | get j g | set i none (set j none g)
+... | some (era a0)       | some (era b0)       | g = g
+... | some (era a0)       | some (con b0 b1 b2) | g = eras-rule b1 b2       g
+... | some (era a0)       | some (dup b0 b1 b2) | g = eras-rule b1 b2       g
+... | some (con a0 a1 a2) | some (era b0)       | g = eras-rule a1 a2       g
+... | some (con a0 a1 a2) | some (con b0 b1 b2) | g = anni-rule a1 a2 b1 b2 g
+... | some (con a0 a1 a2) | some (dup b0 b1 b2) | g = comm-rule a1 a2 b1 b2 g
+... | some (dup a0 a1 a2) | some (era b0)       | g = eras-rule a1 a2       g
+... | some (dup a0 a1 a2) | some (con b0 b1 b2) | g = comm-rule b1 b2 a1 a2 g
+... | some (dup a0 a1 a2) | some (dup b0 b1 b2) | g = anni-rule b1 b2 a1 a2 g
+... | a                   | b                   | g = a # b # g
 
 -- Finds the active pairs of a graph
-active-pairs : Graph -> List ActivePair
+active-pairs : Graph -> List IndexPair
 active-pairs graph = find zero empty graph where
 
   -- Maps variables to indices where they occur
@@ -192,37 +175,85 @@ active-pairs graph = find zero empty graph where
   ext idx var map = λ x -> if (eq x var) (some idx) (map x)
 
   -- Registers an active pair, when found
-  reg : Maybe Nat -> Nat -> List ActivePair -> List ActivePair
+  reg : Maybe Nat -> Nat -> List IndexPair -> List IndexPair
   reg none     j xs = xs
-  reg (some i) j xs = pair i j , xs
+  reg (some i) j xs = pair i j # xs
 
   -- Finds and collects all active pairs
-  find : Nat -> Map -> Graph -> List ActivePair
-  find i map nil                    = nil
-  find i map (air          , graph) = find (succ i) map graph
-  find i map (era a0       , graph) = reg (map a0) i (find (succ i) (ext i a0 map) graph) 
-  find i map (con a0 a1 a2 , graph) = reg (map a0) i (find (succ i) (ext i a0 map) graph)
-  find i map (dup a0 a1 a2 , graph) = reg (map a0) i (find (succ i) (ext i a0 map) graph)
+  find : Nat -> Map -> Graph -> List IndexPair
+  find i map nil                 = nil
+  find i map (none      # graph) = find (succ i) map graph
+  find i map (some node # graph) =
+    let a0 = get-main node in
+    let xs = find (succ i) (ext i a0 map) graph
+    in reg (map a0) i xs
 
 -- Performs a parallel reduction of all active pairs
 reduce : Graph -> Graph
 reduce graph = foldr interact graph (active-pairs graph)
 
--- Analysis
--- --------
+-- ~
+-- ~
+-- ~
 
+-- Theorems and Proofs
+-- ===================
 
+-- An active pair has identical main ports
+IsActive : IndexPair -> Graph -> Set
+IsActive (pair i j) g with get i g | get j g
+... | none   | y      = Empty
+... | x      | none   = Empty
+... | some x | some y = Pair (i != j) (get-main x == get-main y)
 
+-- A normalized graph has no active pairs
+IsNormal : Graph -> Set
+IsNormal graph = (npair : IndexPair) -> Not (IsActive npair graph)
 
+-- Reduction relation
+data _=>_ : Graph -> Graph -> Set where
+  nham : ∀ {npair graph} -> IsActive npair graph -> graph => interact npair graph
 
+-- Reflexive transitive closure
+data _==>_ : Graph -> Graph -> Set where
+  base : ∀ g -> g ==> g
+  step : ∀ {g0 g1 g2} -> g0 => g1 -> g1 => g2 -> g0 ==> g2
 
+-- A graph is linear when all symbols are CON
+IsLinear : Graph -> Set
+IsLinear graph = ∀ i -> Unwrap (get i graph) (λ x -> symbol x == CON)
 
+-- Substitution doesn't affect the size
+size-subst : ∀ a b g -> size (subst a b g) == size g
+size-subst a b nil                       = refl
+size-subst a b (none                # g) = size-subst a b g
+size-subst a b (some (era a0)       # g) = apl succ (size-subst a b g)
+size-subst a b (some (con a0 a1 a2) # g) = apl succ (size-subst a b g)
+size-subst a b (some (dup a0 a1 a2) # g) = apl succ (size-subst a b g)
 
-main : _
-main =
-  let g = nil in
-  let g = con 0 1 1 , g in
-  let g = con 2 4 4 , g in
-  let g = con 0 2 3 , g in
-  let g = con 3 5 5 , g in
-  active-pairs g
+-- Setting a 'some' to 'none' reduces size by 1
+set-some-to-none-size : ∀ i g -> S _ (λ x -> get i g == some x) -> succ (size (set i none g)) == size g
+set-some-to-none-size zero     (some x # g) p = refl
+set-some-to-none-size (succ i) (some x # g) p = apl succ (set-some-to-none-size i g p)
+set-some-to-none-size (succ i) (none   # g) p = set-some-to-none-size i g p
+
+-- Getting after setting (a different index) returns the same result
+get-after-set : ∀ i x j y g -> i != j -> get i g == x -> get i (set j y g) == x
+get-after-set zero     x zero     y nil      e0 e1 = e1
+get-after-set zero     x zero     y (nd # g) e0 e1 = absurd (e0 refl)
+get-after-set zero     x (succ j) y nil      e0 e1 = e1
+get-after-set zero     x (succ j) y (nd # g) e0 e1 = e1
+get-after-set (succ i) x zero     y nil      e0 e1 = e1
+get-after-set (succ i) x zero     y (nd # g) e0 e1 = e1
+get-after-set (succ i) x (succ j) y nil      e0 e1 = e1
+get-after-set (succ i) x (succ j) y (nd # g) e0 e1 = get-after-set i x j y g (λ k -> e0 (apl succ k)) e1
+
+-- Reducing a linear graph decreases its size by 2
+linear-decreases : ∀ {g0 g1} -> IsLinear g0 -> g0 => g1 -> size g0 == succ (succ (size g1))
+linear-decreases li (nham {pair i j} {g0} x) with get i g0 in got-i | get j g0 in got-j | li i | li j | x
+... | some (con a0 a1 a2) | some (con b0 b1 b2) | li-i | li-j | pair x0 x1
+  rewrite size-subst (if (eq a1 a2) b1 a2) (if (eq a1 b2) b1 b2) (subst a1 b1 (set i none (set j none g0)))
+  rewrite size-subst a1 b1 (set i none (set j none g0))
+  rewrite set-some-to-none-size i (set j none g0) (con a0 a1 a2 , get-after-set i (some (con a0 a1 a2)) j none g0 x0 got-i)
+  rewrite set-some-to-none-size j g0 (con b0 b1 b2 , got-j)
+  = refl
