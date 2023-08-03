@@ -17,6 +17,10 @@ data Empty : Set where
 data Pair (a b : Set) : Set where
   pair : a -> b -> Pair a b
 
+data Fin : Nat -> Set where
+  fz : ∀ {n} -> Fin (succ n)
+  fs : ∀ {n} -> Fin n -> Fin (succ n)
+
 Not : {a : Level} -> Set a -> Set a
 Not a = a -> Empty
 
@@ -78,4 +82,25 @@ absurd ()
 
 foo : ∀ x y -> succ x != succ y -> x != y
 foo x y nsxy xy = nsxy (apl succ xy)
+
+
+-- Well Founded Stuff
+
+data Acc {A : Set} (R : A -> A -> Set) (x : A) : Set where
+  acc : (p : ∀ y -> R y x -> Acc R y) -> Acc R x
+
+WF : {A : Set} (R : A -> A -> Set) -> Set
+WF R = ∀ x -> Acc R x
+
+data _<N_ : Nat -> Nat -> Set where
+  <base : ∀ {a} -> a <N succ a
+  <step : ∀ {a b} -> a <N b -> a <N succ b
+
+WF< : WF _<N_ 
+WF< zero     = acc (λ y ())
+WF< (succ x) = acc (λ y f -> aux x y f) where
+  aux : (x y : Nat) -> y <N succ x -> Acc _<N_ y
+  aux x .x <base = WF< x
+  aux x  y (<step f) with WF< x
+  ... | acc p = p y f
 

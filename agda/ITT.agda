@@ -250,10 +250,12 @@ get-after-set (succ i) x (succ j) y (nd # g) e0 e1 = get-after-set i x j y g (λ
 
 -- Reducing a linear graph decreases its size by 2
 linear-decreases : ∀ {g0 g1} -> IsLinear g0 -> g0 => g1 -> size g0 == succ (succ (size g1))
-linear-decreases li (nham {pair i j} {g0} x) with get i g0 in got-i | get j g0 in got-j | li i | li j | x
-... | some (con a0 a1 a2) | some (con b0 b1 b2) | li-i | li-j | pair x0 x1
-  rewrite size-subst (if (eq a1 a2) b1 a2) (if (eq a1 b2) b1 b2) (subst a1 b1 (set i none (set j none g0)))
-  rewrite size-subst a1 b1 (set i none (set j none g0))
-  rewrite set-some-to-none-size i (set j none g0) (con a0 a1 a2 , get-after-set i (some (con a0 a1 a2)) j none g0 x0 got-i)
-  rewrite set-some-to-none-size j g0 (con b0 b1 b2 , got-j)
-  = refl
+linear-decreases {g0} {g1} lin red = ?
+
+-- linear-decreases li (nham {pair i j} {g0} x) with get i g0 in got-i | get j g0 in got-j | li i | li j | x
+-- ... | some (con a0 a1 a2) | some (con b0 b1 b2) | li-i | li-j | pair x0 x1
+  -- rewrite size-subst (if (eq a1 a2) b1 a2) (if (eq a1 b2) b1 b2) (subst a1 b1 (set i none (set j none g0)))
+  -- rewrite size-subst a1 b1 (set i none (set j none g0))
+  -- rewrite set-some-to-none-size i (set j none g0) (con a0 a1 a2 , get-after-set i (some (con a0 a1 a2)) j none g0 x0 got-i)
+  -- rewrite set-some-to-none-size j g0 (con b0 b1 b2 , got-j)
+  -- = refl
