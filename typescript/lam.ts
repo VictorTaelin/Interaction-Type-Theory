@@ -101,7 +101,7 @@ export function show(term: Term): string {
   }
 }
 
-export function to_net(term: Term, root_ptr: itt.Ptr = itt.ROOT_PTR): itt.Ptr {
+export function to_net(term: Term): itt.Ptr {
 
   // Converts calculus term to interaction net
   function term_to_net(term: Term, up: itt.Ptr, lams: {[key: string]: itt.Ptr}, vars: Array<[string, itt.Ptr]>): itt.Ptr {
@@ -109,7 +109,7 @@ export function to_net(term: Term, root_ptr: itt.Ptr = itt.ROOT_PTR): itt.Ptr {
       case "Lam": {
         var lam = itt.ctr(itt.CON);
         lams[term.nam] = itt.ptr(lam, 1);
-        itt.link(itt.ptr(lam, 1), itt.ptr(itt.ctr(null), 0));
+        itt.link(itt.ptr(lam, 1), itt.ptr(itt.ctr("ERA"), 0));
         var bod = term_to_net(term.bod, itt.ptr(lam, 2), lams, vars);
         itt.link(itt.ptr(lam, 2), bod);
         return itt.ptr(lam, 0);
@@ -138,7 +138,9 @@ export function to_net(term: Term, root_ptr: itt.Ptr = itt.ROOT_PTR): itt.Ptr {
   var dups: number = 0;
 
   // Encode the main term.
-  var main = term_to_net(term, root_ptr, lams, vars);
+  var root_node = itt.ctr("ROOT");
+  var root_ptr  = itt.ptr(root_node, 0);
+  var main      = term_to_net(term, root_ptr, lams, vars);
 
   // Links bound variables.
   for (var i = 0; i < vars.length; i++) {
@@ -146,7 +148,7 @@ export function to_net(term: Term, root_ptr: itt.Ptr = itt.ROOT_PTR): itt.Ptr {
     if (lams[nam]) {
       var bind = lams[nam];
       var used = itt.enter(bind);
-      if (used.targ.$ === null) {
+      if (used.targ.$ === "ERA") {
         itt.link(bind, vari);
       } else {
         var dup = itt.ctr(itt.DUP + (dups++));
@@ -168,7 +170,7 @@ export function from_net(init: itt.Ptr): Term {
   var count = 0;
   function go(prev: itt.Ptr, exit: (1 | 2)[], depth: number): Term {
     const next = itt.enter(prev);
-    if (next.targ.$ === null) {
+    if (next.targ.$ === "ERA" || next.targ.$ === "ROOT") {
       throw "TODO";
     } else if (next.targ.$ === itt.CON) {
       switch (next.slot) {

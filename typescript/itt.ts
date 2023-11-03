@@ -1,11 +1,9 @@
-export type Tag  = number;
+export type Tag  = number | "ERA" | "ROOT";
 export type Ptr  = {targ: Node, slot: 0 | 1 | 2};
 export type Path = {[key: number]: string};
-export type Node = {$: Tag | null , 0: Ptr, 1: Ptr, 2: Ptr};
+export type Node = {$: Tag, 0: Ptr, 1: Ptr, 2: Ptr};
 
-export var ROOT_NODE = ctr(0);
-export var ROOT_PTR  = ptr(ROOT_NODE, 1);
-export var REWRITES  = 0;
+export let REWRITES = 0;
 
 export const CON = 0;
 export const DUP = 1;
@@ -14,7 +12,7 @@ export function ptr(targ: Node, slot: 0 | 1 | 2): Ptr {
   return {slot, targ};
 }
 
-export function ctr($: number | null): Node {
+export function ctr($: Tag): Node {
   return {$, 0: null, 1: null, 2: null} as unknown as Node;
 }
 
@@ -29,10 +27,10 @@ export function enter(a: Ptr): Ptr {
 
 export function rewrite(a: Node, b: Node) {
   ++REWRITES;
-  if (a.$ !== null && b.$ !== null && a.$ === b.$) {
+  if (a.$ !== "ERA" && b.$ !== "ERA" && a.$ === b.$) {
     link(a[1], b[1]);
     link(a[2], b[2]);
-  } else if (a.$ !== null && b.$ !== null && a.$ !== b.$) {
+  } else if (a.$ !== "ERA" && b.$ !== "ERA" && a.$ !== b.$) {
     let A1 = ctr(b.$);
     let A2 = ctr(b.$);
     let B1 = ctr(a.$);
@@ -45,14 +43,14 @@ export function rewrite(a: Node, b: Node) {
     link(ptr(A2,0), a[2]);
     link(ptr(B1,0), b[1]);
     link(ptr(B2,0), b[2]);
-  } else if (a.$ === null && b.$ !== null) {
-    let B1 = ctr(null);
-    let B2 = ctr(null);
+  } else if (a.$ === "ERA" && b.$ !== "ERA") {
+    let B1 = ctr("ERA");
+    let B2 = ctr("ERA");
     link(ptr(B1,0), b[1]);
     link(ptr(B2,0), b[2]);
-  } else if (a.$ !== null && b.$ === null) {
-    let A1 = ctr(null);
-    let A2 = ctr(null);
+  } else if (a.$ !== "ERA" && b.$ === "ERA") {
+    let A1 = ctr("ERA");
+    let A2 = ctr("ERA");
     link(ptr(A1,0), a[1]);
     link(ptr(A2,0), a[2]);
   }
@@ -63,10 +61,11 @@ export function reduce(root: Ptr): Ptr {
   var prev = root;
   while (true) {
     var next = enter(prev);
-    if (next.targ == ROOT_NODE) {
+    if (next.targ.$ == "ROOT") {
       break;
-    } else if (next.slot == 0) {
-      if (prev.slot == 0) {
+    }
+    if (next.slot == 0) {
+      if (prev.targ.$ != "ROOT" && prev.slot == 0) {
         rewrite(prev.targ, next.targ);
         prev = path.pop() as Ptr;
         continue;
@@ -86,7 +85,7 @@ export function normal(root: Ptr): Ptr {
   while (stack.length > 0) {
     var prev = reduce(stack.pop() as Ptr);
     var next = enter(prev);
-    if (next.slot === 0 && next.targ.$ !== null) {
+    if (next.slot === 0 && next.targ.$ !== "ERA") {
       stack.push(ptr(next.targ, 1));
       stack.push(ptr(next.targ, 2));
     }
@@ -119,7 +118,7 @@ export function compare(sym: boolean, a0: Ptr, aR: Ptr, aP: Path, b0: Ptr, bR: P
   var aS = a1.slot;
   var aK = a1.targ.$;
 
-  if (a1 === aR || a1.targ === ROOT_NODE || aK === null) {
+  if (a1 === aR || aK === "ERA" || aK === "ROOT") {
     if (sym) {
       return compare(false, b0, bR, bP, a0, aR, aP);
     } else {
@@ -170,9 +169,11 @@ export function index_to_name(index: number): string {
   return name;
 }
 
-export function parse(input: string, root_ptr: Ptr = ROOT_PTR): Ptr {
+export function parse(input: string): Ptr {
   const lines = input.trim().split("\n");
   const links: { [key: string]: Ptr } = {};
+  var root_node = ctr("ROOT");
+  var root_ptr  = ptr(root_node, 0);
   lines.forEach(line => {
     var got = line.trim().split(" ");
     var neo = ctr(parseInt(got[0]));
@@ -182,7 +183,7 @@ export function parse(input: string, root_ptr: Ptr = ROOT_PTR): Ptr {
       if (p === "@") {
         link(ptr(neo, i), root_ptr);
       } else if (p === "*") {
-        link(ptr(neo, i), ptr(ctr(null), 0));
+        link(ptr(neo, i), ptr(ctr("ERA"), 0));
       } else {
         if (links[p]) {
           link(ptr(neo, i), links[p]);
@@ -205,17 +206,17 @@ export function show(root_ptr: Ptr): string {
         if (node[i] && !node["_"+i]) {
           var targ = node[i].targ;
           var slot = node[i].slot;
-          if (targ === null) {
+          if (targ.$ === "ERA") {
             node["_"+i] = "*";
           } else {
-            var pnam = node === ROOT_NODE ? "@" : index_to_name(next++);
+            var pnam = node.$ === "ROOT" ? "@" : index_to_name(next++);
             node["_"+i] = targ["_"+slot] = pnam;
             visit(targ);
           }
         }
       }
-      if (node != ROOT_NODE) {
-        text = `${node.$ !== null ? node.$ : "*"} ${node._0||""} ${node._1||""} ${node._2||""}\n` + text;
+      if (node.$ !== "ROOT") {
+        text = `${node.$ !== "ERA" ? node.$ : "*"} ${node._0||""} ${node._1||""} ${node._2||""}\n` + text;
       }
       delete node._s;
       delete node._0;
