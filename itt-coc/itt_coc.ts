@@ -22,15 +22,17 @@ function fold<A,P>(list: List<A>, cons: (head: A, tail: P) => P, nil: P): P {
     case "Nil" : return nil;
   }
 }
+
 type Term =
   | { tag: "Var"; val: number }
   | { tag: "Def"; val: Term; bod: (x: Term) => Term } // def <x> = <term>; <term>
-  | { tag: "Lam"; inp: Term; bod: (x: Term) => Term } // λ(x: A) f
+  | { tag: "Lam"; inp: Term; bod: (x: Term) => Term } // λ(<x>: <term>) <term>
   | { tag: "App"; fun: Term; arg: Term }              // (<term> <term>)
   | { tag: "Sup"; lab: string; fst: Term; snd: Term } // [<term> | <term>]#L
   | { tag: "Fst"; lab: string; sup: Term }            // fst#L <term>
   | { tag: "Snd"; lab: string; sup: Term }            // snd#L <term>
   | { tag: "Any" }                                    // *
+  | { tag: "Val"; bod: (x: Term) => Term }            // $<x> <term>
   | { tag: "Ann"; val: Term; typ: Term }              // {<term> : <term>}
   | { tag: "Ref"; nam: string }                       // @term
   | { tag: "Hol", ctx: List<Term> }                   // ?
@@ -45,6 +47,7 @@ const Sup = (lab: string, fst: Term, snd: Term): Term => ({ tag: "Sup", lab, fst
 const Fst = (lab: string, sup: Term): Term            => ({ tag: "Fst", lab, sup });
 const Snd = (lab: string, sup: Term): Term            => ({ tag: "Snd", lab, sup });
 const Any = (): Term                                  => ({ tag: "Any" });
+const Val = (bod: (x: Term) => Term): Term            => ({ tag: "Val", bod });
 const Ann = (val: Term, typ: Term): Term              => ({ tag: "Ann", val, typ });
 const Ref = (nam: string): Term                       => ({ tag: "Ref", nam });
 const Hol = (ctx: List<Term>): Term                   => ({ tag: "Hol", ctx });
@@ -60,6 +63,15 @@ type Book = {[key: string]: Term};
 let BOOK : Book = {};
 let SIZE : number = 0;
 
+// Expands a reference.
+function deref(term: Term): Term {
+  if (term.tag === "Ref" && BOOK[term.nam]) {
+    return reduce(BOOK[term.nam]);
+  } else {
+    return term;
+  }
+}
+
 // Reduces to weak normal form.
 function reduce(term: Term): Term {
   switch (term.tag) {
@@ -71,19 +83,22 @@ function reduce(term: Term): Term {
     case "Fst": return reduce_fst(term.lab, reduce(term.sup));
     case "Snd": return reduce_snd(term.lab, reduce(term.sup));
     case "Any": return Any();
+    case "Val": return Val(term.bod);
     case "Ann": return reduce_ann(term.val, reduce(term.typ));
-    case "Ref": return BOOK[term.nam] || Ref(term.nam);
+    case "Ref": return Ref(term.nam);
     case "Hol": return Hol(term.ctx);
     case "Err": return Err(term.msg);
   }
 }
 
+// Annotations
 function reduce_ann(val: Term, typ: Term): Term {
+  var typ = deref(typ);
   // {t :: λ(x: A) -> B}
   // -------------------------- ann-lam
-  // λ(x: A). {(t {x::A}) :: B}
+  // λ(x: A). {(t x) :: B}
   if (typ.tag === "Lam") {
-    return Lam(typ.inp, x => Ann(App(val, Ann(x, typ.inp)), typ.bod(x)));
+    return Lam(typ.inp, x => Ann(App(val, x), typ.bod(x)));
   }
   // {t :: [A B]#L}
   // ------------------------------- ann-sup
@@ -91,13 +106,24 @@ function reduce_ann(val: Term, typ: Term): Term {
   if (typ.tag === "Sup") {
     return Sup(typ.lab, Ann(Fst(typ.lab, val), typ.fst), Ann(Snd(typ.lab, val), typ.snd));
   }
+  // {t :: $x.T}
+  // -----------
+  // T[x <- t]
+  if (typ.tag === "Val") {
+    return reduce(typ.bod(val));
+  }
+  // {t : *}
+  // -------
+  // t
   if (typ.tag === "Any") {
     return reduce(val);
   }
   return Ann(val, typ);
 }
 
+// Applications
 function reduce_app(fun: Term, arg: Term): Term {
+  var fun = deref(fun);
   // TODO...
   if (fun.tag === "Hol") {
     return Hol(Cons(arg, fun.ctx));
@@ -108,11 +134,21 @@ function reduce_app(fun: Term, arg: Term): Term {
   if (fun.tag === "Lam") {
     return reduce(fun.bod(Ann(arg, fun.inp)));
   }
+  // ...
+  if (fun.tag === "Any") {
+    throw "TODO";
+  }
   // ([a b]#L arg)
   // ------------------- app-sup
   // [(a arg) (b arg)]#L
   if (fun.tag === "Sup") {
     return Sup(fun.lab, App(fun.fst, arg), App(fun.snd, arg));
+  }
+  // ($x.T t)
+  // ----------
+  // ???
+  if (fun.tag === "Val") {
+    throw "TODO";
   }
   // ({x : T} arg)
   // ------------- app-ann
@@ -123,7 +159,9 @@ function reduce_app(fun: Term, arg: Term): Term {
   return App(fun, arg);
 }
 
+// First-Projections
 function reduce_fst(lab: string, sup: Term): Term {
+  var sup = deref(sup);
   // fst#L λ(x: A) B
   // ----------------------------- fst-lam
   // λ(x: A) fst#L B[x <- [x | *]]
@@ -143,6 +181,16 @@ function reduce_fst(lab: string, sup: Term): Term {
       return Sup(sup.lab, Fst(lab, sup.fst), Fst(lab, sup.snd));
     }
   }
+  // ...
+  if (sup.tag === "Any") {
+    throw "TODO";
+  }
+  // fst#L $x.T
+  // -------------------------- fst-val
+  // $x.(fst#L B[x <- [x | *]])
+  if (sup.tag === "Val") {
+    return Val(x => Fst(lab, sup.bod(Sup(lab, x, Any()))));
+  }
   // fst#L {x: T}
   // ------------- fst-ann
   // {fst#L x : T}
@@ -152,7 +200,9 @@ function reduce_fst(lab: string, sup: Term): Term {
   return Fst(lab, sup);
 }
 
+// Second-Projections
 function reduce_snd(lab: string, sup: Term): Term {
+  var sup = deref(sup);
   // snd#L λ(x: A) B
   // ----------------------------- snd-lam
   // λ(x: A) snd#L B[x <- [* | x]]
@@ -172,6 +222,16 @@ function reduce_snd(lab: string, sup: Term): Term {
       return Sup(sup.lab, Snd(lab, sup.snd), Snd(lab, sup.snd));
     }
   }
+  // ...
+  if (sup.tag === "Any") {
+    throw "TODO";
+  }
+  // snd#L $x.T
+  // -------------------------- snd-val
+  // $x.(snd#L B[x <- [x | *]])
+  if (sup.tag === "Val") {
+    return Val(x => Snd(lab, sup.bod(Sup(lab, Any(), x))));
+  }
   // snd#L {x: T}
   // ------------- snd-ann
   // {snd#L x : T}
@@ -187,12 +247,13 @@ function normal(term: Term, dep: number = 0): Term {
   switch (term.tag) {
     case "Var": return Var(term.val);
     case "Def": throw "unreachable";
-    case "Lam": return Lam(normal(term.inp, dep), x => normal(term.bod(Ann(Var(dep), term.inp)), dep+1));
+    case "Lam": return Lam(normal(term.inp, dep), x => normal(term.bod(Var(dep)), dep+1));
     case "App": return App(normal(term.fun, dep), normal(term.arg, dep));
     case "Sup": return Sup(term.lab, normal(term.fst, dep), normal(term.snd, dep));
     case "Fst": return Fst(term.lab, normal(term.sup, dep));
     case "Snd": return Snd(term.lab, normal(term.sup, dep));
     case "Any": return Any();
+    case "Val": return Val(x => normal(term.bod(x)));
     //case "Ann": return Ann(normal(term.val, dep), normal(term.typ, dep));
     case "Ann": return check(normal(term.val, dep), normal(term.typ, dep), dep);
     case "Ref": return Ref(term.nam);
@@ -277,6 +338,16 @@ function equal(a: Term, b: Term, dep: number): boolean {
   if (a.tag === "Any" && b.tag === "Any") {
     return true;
   }
+  if (a.tag === "Val" && b.tag === "Val") {
+    return equal(a.bod(Var(dep)), b.bod(Var(dep)), dep + 1);
+  }
+  if (a.tag === "Ref" && b.tag === "Ref") {
+    if (a.nam === b.nam) {
+      return true;
+    } else {
+      throw "TODO";
+    }
+  }
   if (a.tag === "Ann") {
     return equal(a.val, b, dep);
   }
@@ -299,6 +370,7 @@ function show_term(term: Term, dep: number = 0): string {
     case "Fst": return "fst#" + term.lab + " " + show_term(term.sup, dep);
     case "Snd": return "snd#" + term.lab + " " + show_term(term.sup, dep);
     case "Any": return "*";
+    case "Val": return "$" + num_to_str(dep) + " " + show_term(term.bod(Var(dep)), dep+1);
     case "Ann": return "{" + show_term(term.val, dep) + ":" + show_term(term.typ, dep) + "}";
     case "Ref": return "@" + term.nam;
     case "Hol": return "?[" + fold(term.ctx, (x,xs) => show_term(x,dep) + " | " + xs, "*") + "]";
@@ -324,7 +396,23 @@ function find<A>(list: List<[string, Term]>, nam: string): Term {
 }
 
 function skip(code: string): string {
-  return /[\n ]/.test(code[0]) ? skip(code.slice(1)) : code;
+  while (true) {
+    // Comment
+    if (code.slice(0, 2) === "//") {
+      while (code.length != 0 && code[0] != "\n") {
+        code = code.slice(1);
+      }
+      code = code.slice(1);
+      continue;
+    }
+    // Spaces
+    if (code[0] === "\n" || code[0] === " ") {
+      code = code.slice(1);
+      continue;
+    }
+    break;
+  }
+  return code;
 }
 
 function is_name_char(c: string): boolean {
@@ -355,13 +443,19 @@ function parse_text(code: string, text: string): [string, null] {
 function parse_term(code: string): [string, (ctx: List<[string, Term]>) => Term] {
   code = skip(code);
   // LAM: `λ(x: T) f`
-  if (code[0] === "λ" && code[1] === "(") {
-    var [code, nam] = parse_name(code.slice(2));
-    var [code, _  ] = parse_text(code, ":");
-    var [code, typ] = parse_term(code);
-    var [code, __ ] = parse_text(code, ")");
-    var [code, bod] = parse_term(code);
-    return [code, ctx => Lam(typ(ctx), x => bod(Cons([nam,x], ctx)))];
+  if (code[0] === "λ") {
+    if (code[1] === "(") {
+      var [code, nam] = parse_name(code.slice(2));
+      var [code, _  ] = parse_text(code, ":");
+      var [code, typ] = parse_term(code);
+      var [code, __ ] = parse_text(code, ")");
+      var [code, bod] = parse_term(code);
+      return [code, ctx => Lam(typ(ctx), x => bod(Cons([nam,x], ctx)))];
+    } else {
+      var [code, nam] = parse_name(code.slice(1));
+      var [code, bod] = parse_term(code);
+      return [code, ctx => Lam(Any(), x => bod(Cons([nam,x], ctx)))];
+    }
   }
   // APP: `(f x y z ...)`
   if (code[0] === "(") {
@@ -407,6 +501,12 @@ function parse_term(code: string): [string, (ctx: List<[string, Term]>) => Term]
   // ANY: `*`
   if (code[0] === "*") {
     return [code.slice(1), ctx => Any()];
+  }
+  // VAl: `$x T`
+  if (code[0] === "$") {
+    var [code, nam] = parse_name(code.slice(1));
+    var [code, bod] = parse_term(code);
+    return [code, ctx => Val(x => bod(Cons([nam, x], ctx)))];
   }
   // ANN: `{x : T}`
   if (code[0] === "{") {
@@ -462,28 +562,41 @@ function do_parse_book(code: string) {
 // -----
 
 var code = `
-@test  = λ(A: *) λ(B: *) λ(aa: λ(x: A) A) λ(ab: λ(x: A) B) λ(ba: λ(x: B) A) λ(bb: λ(x: B) B) λ(a: A) λ(b: B) (ba (aa a))
-@Empty = λ(P: *) P
-@Unit  = λ(P: *) λ(x: P) P
-@unit  = λ(P: *) λ(x: P) x
-@Equal = λ(T: *) λ(a: T) λ(b: T) λ(P: λ(b: T) *) λ(r: (P a)) (P b)
-@refl  = λ(T: *) λ(x: T) λ(P: λ(b: T) *) λ(r: (P x)) r
-@Bool  = λ(P: *) λ(t: P) λ(f: P) P
-@true  = λ(P: *) λ(t: P) λ(f: P) t
-@false = λ(P: *) λ(t: P) λ(f: P) f
-@bid   = {λ(x: *) x : λ(x: Bool) Bool}
-@not   = λ(b: Bool) (b Bool false true)
-@Nat   = λ(P: *) λ(s: λ(x: P) P) λ(z: P) P
-@succ  = λ(n: Nat) λ(P: *) λ(s: λ(x: P) P) λ(z: P) (s (n P s z))
-@zero  = λ(P: *) λ(s: λ(x: P) P) λ(z: P) z
-@Pair  = λ(A: *) λ(B: *) λ(P: *) λ(p: λ(a: A) λ(b: B) P) P
-@pair  = λ(A: *) λ(B: *) λ(a: A) λ(b: B) λ(P: *) λ(p: λ(a: A) λ(b: B) P) (p a b)
-@List  = λ(P: *) λ(c: λ(x: Nat) λ(xs: P) P) λ(n: P) P
-@cons  = λ(x: Nat) λ(xs: List) λ(P: *) λ(c: λ(x: Nat) λ(xs: P) P) λ(n: P) (c x (xs P c n))
-@nil   = λ(P: *) λ(c: λ(x: Nat) λ(xs: P) P) λ(n: P) n
-@main  = {[true | false]#A : Bool}
-`;
+//@test  = λ(A: *) λ(B: *) λ(aa: λ(x: A) A) λ(ab: λ(x: A) B) λ(ba: λ(x: B) A) λ(bb: λ(x: B) B) λ(a: A) λ(b: B) (ba (aa a))
+//@Empty = λ(P: *) P
+//@Unit  = λ(P: *) λ(x: P) P
+//@unit  = λ(P: *) λ(x: P) x
+//@Equal = λ(T: *) λ(a: T) λ(b: T) λ(P: λ(b: T) *) λ(r: (P a)) (P b)
+//@refl  = λ(T: *) λ(x: T) λ(P: λ(b: T) *) λ(r: (P x)) r
+//@Bool  = λ(P: *) λ(t: P) λ(f: P) P
+//@true  = λ(P: *) λ(t: P) λ(f: P) t
+//@false = λ(P: *) λ(t: P) λ(f: P) f
+//@bid   = {λ(x: *) x : λ(x: Bool) Bool}
+//@not   = λ(b: Bool) (b Bool false true)
+//@Nat   = λ(P: *) λ(s: λ(x: Nat) P) λ(z: P) P
+//@succ  = λ(n: Nat) λ(P: *) λ(s: λ(x: Nat) P) λ(z: P) (s n)
+//@zero  = λ(P: *) λ(s: λ(x: Nat) P) λ(z: P) z
+//@Pair  = λ(A: *) λ(B: *) λ(P: *) λ(p: λ(a: A) λ(b: B) P) P
+//@pair  = λ(A: *) λ(B: *) λ(a: A) λ(b: B) λ(P: *) λ(p: λ(a: A) λ(b: B) P) (p a b)
+//@List  = λ(P: *) λ(c: λ(x: Nat) λ(xs: P) P) λ(n: P) P
+//@cons  = λ(x: Nat) λ(xs: List) λ(P: *) λ(c: λ(x: Nat) λ(xs: P) P) λ(n: P) (c x (xs P c n))
+//@nil   = λ(P: *) λ(c: λ(x: Nat) λ(xs: P) P) λ(n: P) n
+//@main0 = {[true | false]#A : Bool}
 
+//@Self  = λ(S:*) $x.{x : (S x)}
+//@true  = λ(P:*) λ(t:*) λ(f:*) t
+//@false = λ(P:*) λ(t:*) λ(f:*) f
+//@Bool  = $self.{self : λ(P: λ(x: Bool) *) λ(t: (P true)) λ(f: (P false)) (P self)}
+//@main  = {true : Bool}
+
+@Nat    = λ(P: *) λ(s: λ(x: Nat) P) λ(z: P) P
+@succ   = λ(n:Nat) λ(P:*) λ(s: λ(x:Nat)P) λ(z:P) (s n)
+@zero   = λ(P:*) λ(s: λ(x:Nat)P) λ(z:P) z
+@double = λ(n: Nat) (n Nat λ(p: Nat)(succ (succ (double p))) zero)
+
+@main  = (succ (succ (succ (succ (succ zero)))))
+
+`;
 
 do_parse_book(code);
 
