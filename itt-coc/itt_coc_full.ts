@@ -19,6 +19,7 @@ function fold<A,P>(list: List<A>, cons: (head: A, tail: P) => P, nil: P): P {
 
 type Term =
   | { tag: "Var"; val: number }
+  | { tag: "Set" }                                    // *
   | { tag: "Def"; val: Term; bod: (x: Term) => Term } // def <x> = <term>; <term>
   | { tag: "All"; inp: Term; bod: (x: Term) => Term } // ∀(<x>: <term>) <term>
   | { tag: "Lam"; bod: (x: Term) => Term }            // λx <term>
@@ -26,7 +27,6 @@ type Term =
   | { tag: "Sup"; lab: string; fst: Term; snd: Term } // [<term> | <term>]#L
   | { tag: "Fst"; lab: string; sup: Term }            // fst#L <term>
   | { tag: "Snd"; lab: string; sup: Term }            // snd#L <term>
-  | { tag: "Any" }                                    // *
   | { tag: "Slf"; bod: (x: Term) => Term }            // $<x> <term>
   | { tag: "Ann"; val: Term; typ: Term }              // {<term> : <term>}
   | { tag: "Ref"; nam: string }                       // @term
@@ -35,6 +35,7 @@ type Term =
 
 // Constructors
 const Var = (val: number): Term                       => ({ tag: "Var", val });
+const Set = (): Term                                  => ({ tag: "Set" });
 const Def = (val: Term, bod: (x: Term) => Term): Term => ({ tag: "Def", val, bod });
 const Lam = (bod: (x: Term) => Term): Term            => ({ tag: "Lam", bod });
 const All = (inp: Term, bod: (x: Term) => Term): Term => ({ tag: "All", inp, bod });
@@ -42,7 +43,6 @@ const App = (fun: Term, arg: Term): Term              => ({ tag: "App", fun, arg
 const Sup = (lab: string, fst: Term, snd: Term): Term => ({ tag: "Sup", lab, fst, snd });
 const Fst = (lab: string, sup: Term): Term            => ({ tag: "Fst", lab, sup });
 const Snd = (lab: string, sup: Term): Term            => ({ tag: "Snd", lab, sup });
-const Any = (): Term                                  => ({ tag: "Any" });
 const Slf = (bod: (x: Term) => Term): Term            => ({ tag: "Slf", bod });
 const Ann = (val: Term, typ: Term): Term              => ({ tag: "Ann", val, typ });
 const Ref = (nam: string): Term                       => ({ tag: "Ref", nam });
@@ -68,14 +68,14 @@ function deref(book: Book, term: Term): Term {
 function reduce(book: Book, term: Term): Term {
   switch (term.tag) {
     case "Var": return Var(term.val);
+    case "Set": return Set();
     case "Def": return reduce(book, term.bod(term.val));
-    case "Lam": return Lam(term.bod);
     case "All": return All(term.inp, term.bod);
+    case "Lam": return Lam(term.bod);
     case "App": return reduce_app(book, reduce(book, term.fun), term.arg);
     case "Sup": return Sup(term.lab, term.fst, term.snd);
     case "Fst": return reduce_fst(book, term.lab, reduce(book, term.sup));
     case "Snd": return reduce_snd(book, term.lab, reduce(book, term.sup));
-    case "Any": return Any();
     case "Slf": return Slf(term.bod);
     case "Ann": return reduce_ann(book, term.val, reduce(book, term.typ));
     case "Ref": return Ref(term.nam);
@@ -105,12 +105,6 @@ function reduce_ann(book: Book, val: Term, typ: Term): Term {
   if (typ.tag === "Slf") {
     return reduce(book, typ.bod(val));
   }
-  // {t : *}
-  // -------
-  // t
-  if (typ.tag === "Any") {
-    return reduce(book, val);
-  }
   return Ann(val, typ);
 }
 
@@ -126,10 +120,6 @@ function reduce_app(book: Book, fun: Term, arg: Term): Term {
   // body[x <- arg]
   if (fun.tag === "Lam") {
     return reduce(book, fun.bod(arg));
-  }
-  // ...
-  if (fun.tag === "Any") {
-    throw "TODO";
   }
   // ([a b]#L arg)
   // ------------------- app-sup
@@ -160,7 +150,7 @@ function reduce_fst(book: Book, lab: string, sup: Term): Term {
   // ----------------------- fst-lam
   // λx fst#L B[x <- [x | *]]
   if (sup.tag === "Lam") {
-    return Lam(x => Fst(lab, sup.bod(Sup(lab, x, Any()))));
+    return Lam(x => Fst(lab, sup.bod(Sup(lab, x, Set()))));
   }
   // fst#L [a | b]#M
   // -------------------------------------------- fst-sup
@@ -172,15 +162,11 @@ function reduce_fst(book: Book, lab: string, sup: Term): Term {
       return Sup(sup.lab, Fst(lab, sup.fst), Fst(lab, sup.snd));
     }
   }
-  // ...
-  if (sup.tag === "Any") {
-    throw "TODO";
-  }
   // fst#L $x.T
   // -------------------------- fst-val
   // $x.(fst#L B[x <- [x | *]])
   if (sup.tag === "Slf") {
-    return Slf(x => Fst(lab, sup.bod(Sup(lab, x, Any()))));
+    return Slf(x => Fst(lab, sup.bod(Sup(lab, x, Set()))));
   }
   // fst#L {x: T}
   // ------------- fst-ann
@@ -198,7 +184,7 @@ function reduce_snd(book: Book, lab: string, sup: Term): Term {
   // ------------------------ snd-lam
   // λx snd#L B[x <- [* | x]]
   if (sup.tag === "Lam") {
-    return Lam(x => Snd(lab, sup.bod(Sup(lab, Any(), x))));
+    return Lam(x => Snd(lab, sup.bod(Sup(lab, Set(), x))));
   }
   // snd#L [a | b]#M
   // -------------------------------------------- snd-sup
@@ -210,15 +196,11 @@ function reduce_snd(book: Book, lab: string, sup: Term): Term {
       return Sup(sup.lab, Snd(lab, sup.snd), Snd(lab, sup.snd));
     }
   }
-  // ...
-  if (sup.tag === "Any") {
-    throw "TODO";
-  }
   // snd#L $x.T
   // -------------------------- snd-val
   // $x.(snd#L B[x <- [x | *]])
   if (sup.tag === "Slf") {
-    return Slf(x => Snd(lab, sup.bod(Sup(lab, Any(), x))));
+    return Slf(x => Snd(lab, sup.bod(Sup(lab, Set(), x))));
   }
   // snd#L {x: T}
   // ------------- snd-ann
@@ -234,15 +216,14 @@ function normal(book: Book, term: Term, dep: number = 0): Term {
   var term = reduce(book, term);
   switch (term.tag) {
     case "Var": return Var(term.val);
+    case "Set": return Set();
     case "Def": throw "unreachable";
-    case "All": return All(term.inp, x => normal(book, term.bod(Ann(x, term.inp)), dep+1));
-    case "Lam": return Lam(x => normal(book, term.bod(x), dep+1));
     case "All": return All(normal(book, term.inp, dep), x => normal(book, term.bod(Ann(x, term.inp)), dep+1));
+    case "Lam": return Lam(x => normal(book, term.bod(x), dep+1));
     case "App": return App(normal(book, term.fun, dep), normal(book, term.arg, dep));
     case "Sup": return Sup(term.lab, normal(book, term.fst, dep), normal(book, term.snd, dep));
     case "Fst": return Fst(term.lab, normal(book, term.sup, dep));
     case "Snd": return Snd(term.lab, normal(book, term.sup, dep));
-    case "Any": return Any();
     case "Slf": return Slf(x => normal(book, term.bod(x), dep+1));
     case "Ann": return ANN(book, normal(book, term.val, dep), normal(book, term.typ, dep), dep);
     case "Ref": return book[term.nam] ? normal(book, book[term.nam].val, dep) : Ref(term.nam);
@@ -296,6 +277,9 @@ function equal(book: Book, a: Term, b: Term, dep: number): boolean {
   if (a.tag === "Var" && b.tag === "Var") {
     return a.val === b.val;
   }
+  if (a.tag === "Set" && b.tag === "Set") {
+    return true;
+  }
   if (a.tag === "Lam" && b.tag === "Lam") {
     return equal(book, a.bod(Var(dep)), b.bod(Var(dep)), dep+1);
   }
@@ -326,9 +310,6 @@ function equal(book: Book, a: Term, b: Term, dep: number): boolean {
     } else {
       throw "TODO";
     }
-  }
-  if (a.tag === "Any" && b.tag === "Any") {
-    return true;
   }
   if (a.tag === "Slf" && b.tag === "Slf") {
     return equal(book, a.bod(Var(dep)), b.bod(Var(dep)), dep + 1);
@@ -375,17 +356,16 @@ function check(book: Book) {
 function show_term(term: Term, dep: number = 0): string {
   switch (term.tag) {
     case "Var": return num_to_str(term.val);
+    case "Set": return "*";
     case "Def": return "def " + num_to_str(dep) + " = " + show_term(term.val, dep) + ";\n" + show_term(term.bod(Var(dep)), dep + 1);
-    case "Lam": return "λ"+num_to_str(dep)+" " + show_term(term.bod(Var(dep)), dep + 1);
-    case "All": return "∀("+num_to_str(dep)+":"+show_term(term.inp, dep)+")" + show_term(term.bod(Var(dep)), dep + 1);
+    case "All": return "∀(" +num_to_str(dep) + ":"+show_term(term.inp, dep)+")" + show_term(term.bod(Var(dep)), dep + 1);
+    case "Lam": return "λ" +num_to_str(dep) + " " + show_term(term.bod(Var(dep)), dep + 1);
     case "App": return "(" + show_term(term.fun, dep) + " " + show_term(term.arg, dep) + ")";
     case "Sup": return "[" + show_term(term.fst, dep) + " | " + show_term(term.snd, dep) + "]#" + term.lab;
     case "Fst": return "fst#" + term.lab + " " + show_term(term.sup, dep);
     case "Snd": return "snd#" + term.lab + " " + show_term(term.sup, dep);
-    case "Any": return "*";
     case "Slf": return "$" + num_to_str(dep) + " " + show_term(term.bod(Var(dep)), dep+1);
     case "Ann": return "{" + show_term(term.val, dep) + ":" + show_term(term.typ, dep) + "}";
-    //case "Ann": return show_term(term.val, dep);
     case "Ref": return "@" + term.nam;
     case "Hol": return "?[" + fold(term.ctx, (x,xs) => show_term(x,dep) + " | " + xs, "*") + "]";
     case "Err": return "⊥{"+term.msg+"}";
@@ -517,11 +497,11 @@ function parse_term(code: string): [string, (ctx: List<[string, Term]>) => Term]
     var [code, bod] = parse_term(code);
     return [code, ctx => Def(val(ctx), x => bod(Cons([nam,x], ctx)))];
   }
-  // ANY: `*`
+  // SET: `*`
   if (code[0] === "*") {
-    return [code.slice(1), ctx => Any()];
+    return [code.slice(1), ctx => Set()];
   }
-  // VAl: `$x T`
+  // SLF: `$x T`
   if (code[0] === "$") {
     var [code, nam] = parse_name(code.slice(1));
     //var [code, _  ] = parse_text(code, " ");
@@ -585,14 +565,20 @@ function do_parse_book(code: string): Book {
 // -----
 
 var code = `
-// Self Types
-@Self : * = λF $self { self: (F self) }
+// Any
 
-// Equality
-@Equal : * =
-  λa λb ∀(P: ∀(x:*) *) ∀(x: (P a)) (P b)
+@Any : $x x = $x x
 
-@refl : ∀(a: *) (Equal a a) =
+// Self Type
+
+@Self : Any = λF $self { self: (F self) }
+
+// Heterogeneous Equality
+
+@Equal : ∀(a: *) ∀(b: *) * =
+  λa λb ∀(P: ∀(x: Any) *) ∀(x: (P a)) (P b)
+
+@refl : ∀(a: Any) (Equal a a) =
   λa λP λx x
 
 // Boolean
@@ -612,19 +598,45 @@ var code = `
 
 // Boolean Induction
 
-@match : ∀(b: Bool) ∀(P: ∀(x:Bool) *) ∀(t: (P true)) ∀(f: (P false)) (P b) =
+@bool_match : ∀(b: Bool) ∀(P: ∀(x:Bool) *) ∀(t: (P true)) ∀(f: (P false)) (P b) =
   λb λP λt λf (b (P b) λe(e P t) λe(e P f))
 
 // Boolean Negation
 
 @not : ∀(b: Bool) Bool =
-  λb (match b λb(Bool) false true)
+  λb (bool_match b λb(Bool) false true)
 
 // Double Negation Theorem
 
 @theorem
   : ∀(b: Bool) (Equal (not (not b)) b)
-  = λb (match b λb(Equal (not (not b)) b) (refl *) (refl *))
+  = λb (bool_match b λb(Equal (not (not b)) b) (refl *) (refl *))
+
+
+
+
+//@Nat : * =
+  //(Self λself
+    //∀(P: *) 
+    //∀(z: ∀(e: (Equal zero self)) P)
+    //∀(s: ∀(n: Nat) ∀(e: (Equal (succ n) self)) P)
+    //P)
+
+//@zero : Nat =
+  //λP λz λs (z (refl *))
+
+//@succ : ∀(n: Nat) Nat =
+  //λn λP λz λs (s n (refl *))
+
+////@nat_match : ∀(n: Nat) ∀(P: ∀(x:Nat) *) ∀(z: (P zero)) ∀(s: ∀(n:Nat) (P (succ n))) (P n) =
+  ////λn λP λz λs (n (P n) λe(e P z) λp λe(e P (s p)))
+
+
+//@main : ∀(P: *) ∀(t: P) P = λx (x ∀(P:*)∀(t:P)P λPλt(t))
+
+
+
 `;
 
 check(do_parse_book(code));
+

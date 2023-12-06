@@ -8,6 +8,7 @@ const Nil  = <A>(): List<A>                       => ({ tag: "Nil" });
 // Terms
 type Term =
   | { tag: "Var"; val: number }
+  | { tag: "Set"; }                                   // *
   | { tag: "All"; inp: Term; bod: (x: Term) => Term } // ∀(<x>: <term>) <term>
   | { tag: "Lam"; bod: (x: Term) => Term }            // λx <term>
   | { tag: "App"; fun: Term; arg: Term }              // (<term> <term>)
@@ -15,8 +16,9 @@ type Term =
   | { tag: "Ann"; val: Term; typ: Term }              // {<term> : <term>}
   | { tag: "Ref"; nam: string }                       // @term
 const Var = (val: number): Term                       => ({ tag: "Var", val });
-const Lam = (bod: (x: Term) => Term): Term            => ({ tag: "Lam", bod });
+const Set = (): Term                                  => ({ tag: "Set" });
 const All = (inp: Term, bod: (x: Term) => Term): Term => ({ tag: "All", inp, bod });
+const Lam = (bod: (x: Term) => Term): Term            => ({ tag: "Lam", bod });
 const App = (fun: Term, arg: Term): Term              => ({ tag: "App", fun, arg });
 const Slf = (bod: (x: Term) => Term): Term            => ({ tag: "Slf", bod });
 const Ann = (val: Term, typ: Term): Term              => ({ tag: "Ann", val, typ });
@@ -41,8 +43,9 @@ function deref(book: Book, term: Term): Term {
 function reduce(book: Book, term: Term): Term {
   switch (term.tag) {
     case "Var": return Var(term.val);
-    case "Lam": return Lam(term.bod);
+    case "Set": return Set();
     case "All": return All(term.inp, term.bod);
+    case "Lam": return Lam(term.bod);
     case "App": return reduce_app(book, reduce(book, term.fun), term.arg);
     case "Slf": return Slf(term.bod);
     case "Ann": return reduce_ann(book, term.val, reduce(book, term.typ));
@@ -97,7 +100,7 @@ function normal(book: Book, term: Term, dep: number = 0): Term {
   var term = reduce(book, term);
   switch (term.tag) {
     case "Var": return Var(term.val);
-    case "All": return All(term.inp, x => normal(book, term.bod(Ann(x, term.inp)), dep+1));
+    case "Set": return Set();
     case "Lam": return Lam(x => normal(book, term.bod(x), dep+1));
     case "All": return All(normal(book, term.inp, dep), x => normal(book, term.bod(Ann(x, term.inp)), dep+1));
     case "App": return App(normal(book, term.fun, dep), normal(book, term.arg, dep));
@@ -139,6 +142,9 @@ function ANN(book: Book, val: Term, typ: Term, dep: number): Term {
 function equal(book: Book, a: Term, b: Term, dep: number): boolean {
   if (a.tag === "Var" && b.tag === "Var") {
     return a.val === b.val;
+  }
+  if (a.tag === "Set" && b.tag === "Set") {
+    return true;
   }
   if (a.tag === "Lam" && b.tag === "Lam") {
     return equal(book, a.bod(Var(dep)), b.bod(Var(dep)), dep+1);
@@ -188,8 +194,9 @@ function check(book: Book) {
 function show_term(term: Term, dep: number = 0): string {
   switch (term.tag) {
     case "Var": return num_to_str(term.val);
-    case "Lam": return "λ"+num_to_str(dep)+" " + show_term(term.bod(Var(dep)), dep + 1);
-    case "All": return "∀("+num_to_str(dep)+":"+show_term(term.inp, dep)+")" + show_term(term.bod(Var(dep)), dep + 1);
+    case "Set": return "*";
+    case "All": return "∀(" +num_to_str(dep) + ":"+show_term(term.inp, dep)+")" + show_term(term.bod(Var(dep)), dep + 1);
+    case "Lam": return "λ" +num_to_str(dep) + " " + show_term(term.bod(Var(dep)), dep + 1);
     case "App": return "(" + show_term(term.fun, dep) + " " + show_term(term.arg, dep) + ")";
     case "Slf": return "$" + num_to_str(dep) + " " + show_term(term.bod(Var(dep)), dep+1);
     case "Ann": return "{" + show_term(term.val, dep) + ":" + show_term(term.typ, dep) + "}";
@@ -353,16 +360,20 @@ function do_parse_book(code: string): Book {
 // -----
 
 var code = `
-// Self Types
+// Any
 
-@Self : * = λF $self { self: (F self) }
+@Any : $x x = $x x
 
-// Equality
+// Self Type
 
-@Equal : * =
-  λa λb ∀(P: ∀(x:*) *) ∀(x: (P a)) (P b)
+@Self : Any = λF $self { self: (F self) }
 
-@refl : ∀(a: *) (Equal a a) =
+// Heterogeneous Equality
+
+@Equal : ∀(a: *) ∀(b: *) * =
+  λa λb ∀(P: ∀(x: Any) *) ∀(x: (P a)) (P b)
+
+@refl : ∀(a: Any) (Equal a a) =
   λa λP λx x
 
 // Boolean
@@ -382,19 +393,19 @@ var code = `
 
 // Boolean Induction
 
-@match : ∀(b: Bool) ∀(P: ∀(x:Bool) *) ∀(t: (P true)) ∀(f: (P false)) (P b) =
+@bool_match : ∀(b: Bool) ∀(P: ∀(x:Bool) *) ∀(t: (P true)) ∀(f: (P false)) (P b) =
   λb λP λt λf (b (P b) λe(e P t) λe(e P f))
 
 // Boolean Negation
 
 @not : ∀(b: Bool) Bool =
-  λb (match b λb(Bool) false true)
+  λb (bool_match b λb(Bool) false true)
 
 // Double Negation Theorem
 
 @theorem
   : ∀(b: Bool) (Equal (not (not b)) b)
-  = λb (match b λb(Equal (not (not b)) b) (refl *) (refl *))
+  = λb (bool_match b λb(Equal (not (not b)) b) (refl *) (refl *))
 `;
 
 check(do_parse_book(code));
