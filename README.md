@@ -16,6 +16,14 @@ similar to the Calculus of Constructions. This system presents itself as an
 extremely minimal "reasoning engine", with possible applications to program
 synthesis and symbolic AI.
 
+EDIT: since initially posting this repo, I gained many insights that are NOT
+included here yet. Decay isn't relevant, coherence is just about enforcing
+`t :: A :: B ⊢ A = B`, superpositions can be used for optimal shared
+unification, ANN-binders allow encoding most types with a single unified
+primitive, among others that will be updated. See the itt-coc for an ITT
+flavoured implementation of the Calculus of (Inductive) Constructions.
+
+
 Specification
 -------------
 
