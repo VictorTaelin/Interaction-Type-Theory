@@ -1,10 +1,6 @@
-**Disclaimer: this is a work-in-progress. The claims made in this paper are
-unchecked, and work is ongoing to explore, formalize and prove them rigorously.
-Take this as a
-brainstorm of ideas and no more than that. This approach could or (more likely)
-could not work, but exploring it may get us closer to answers. Come discuss
-these ideas in our [Discord](https://discord.gg/kindelia) server, on the #HVM
-channel!**
+**NOTE: this repository is a WIP. The claims here aren't verified.**
+
+**NOTE: this work has been moved to [Interaction Calculus of Constructions](https://github.com/VictorTaelin/Interaction-Calculus-of-Constructions).**
 
 # Interaction Type Theory
 
